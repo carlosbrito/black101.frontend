@@ -1,0 +1,95 @@
+.table-wrap {
+  width: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-wrap th,
+.table-wrap td {
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  padding: 0.72rem;
+  white-space: nowrap;
+  font-size: 0.89rem;
+}
+
+.table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+}
+
+.table-wrap th:last-child,
+.table-wrap td:last-child {
+  text-align: right;
+}
+
+.table-wrap tbody tr {
+  transition: background-color 120ms ease;
+}
+
+.table-wrap tbody tr:hover {
+  background: #f4f8fe;
+}
+
+.actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.actions button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 0.34rem 0.56rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.actions button:hover {
+  border-color: #b9c7d9;
+  background: #f5f8fd;
+}
+
+.actions .danger {
+  color: var(--danger);
+  border-color: #e5c8c4;
+}
+
+.actions .danger:hover {
+  border-color: #d7aba5;
+  background: #fff5f5;
+}
+
+.skeleton {
+  height: 12px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #e7edf5 10%, #f7f9fc 35%, #e7edf5 60%);
+  background-size: 240% 100%;
+  animation: pulse 1.2s linear infinite;
+}
+
+@keyframes pulse {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
