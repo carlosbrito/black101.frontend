@@ -4,7 +4,7 @@ import { MainLayout } from '../layout/MainLayout';
 import { LoginPage } from '../../features/login/LoginPage';
 import { HomePage } from '../../features/shared/HomePage';
 import { EmConstrucaoPage } from '../../features/shared/EmConstrucaoPage';
-import { AdministradorasPage, AgentesPage, BancosPage, CedentesPage, RepresentantesPage } from '../../features/cadastros/CadastroPages';
+import { AdministradorasPage, AgentesPage, BancosPage, CedentesPage, RepresentantesPage, BancarizadoresPage } from '../../features/cadastros/CadastroPages';
 import { AdministradoraFormPage } from '../../features/cadastros/administradoras/AdministradoraFormPage';
 import { AgenteFormPage } from '../../features/cadastros/agentes/AgenteFormPage';
 import { BancoFormPage } from '../../features/cadastros/bancos/BancoFormPage';
@@ -34,6 +34,8 @@ export const AppRouter = () => {
           <Route path="/cadastro/agentes" element={<AgentesPage />} />
           <Route path="/cadastro/agentes/novo" element={<AgenteFormPage />} />
           <Route path="/cadastro/agentes/:id" element={<AgenteFormPage />} />
+
+          <Route path="/cadastro/bancarizadores" element={<BancarizadoresPage />} />
 
           <Route path="/cadastro/bancos" element={<BancosPage />} />
           <Route path="/cadastro/bancos/novo" element={<BancoFormPage />} />

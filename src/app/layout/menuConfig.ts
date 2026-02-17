@@ -9,7 +9,7 @@ export const legacyMenu: MenuGroup[] = [
       { label: 'Administradoras', route: '/cadastro/administradoras' },
       { label: 'Agentes', route: '/cadastro/agentes' },
       { label: 'Bancos', route: '/cadastro/bancos' },
-      { label: 'Bancarizador', route: c('register/bancarizador') },
+      { label: 'Bancarizador', route: '/cadastro/bancarizadores' },
       { label: 'Cedentes', route: '/cadastro/cedentes' },
       { label: 'Consultoras', route: c('register/consultant') },
       { label: 'Custodiantes', route: c('register/custodians') },
