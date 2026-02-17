@@ -1,22 +1,78 @@
 ﻿import { CadastroCrudPage } from './CadastroCrudPage';
 import type { Column } from '../../shared/ui/DataTable';
+import { getErrorMessage, http } from '../../shared/api/http';
+import { sanitizeDocument } from './cadastroCommon';
+import toast from 'react-hot-toast';
 
-const makeBasicoPage = (title: string, subtitle: string, endpoint: string) => {
+const tiposComCodigo = new Set(['Produto', 'WhiteList', 'BlackList']);
+
+const tiposPessoa = new Set([
+  'Consultora',
+  'Custodiante',
+  'Certificadora',
+  'Gestora',
+  'Fornecedor',
+  'Registradora',
+  'Credenciadora',
+  'Emitente',
+  'PrestadorServico',
+  'Investidor',
+  'Sacado',
+  'Testemunha',
+]);
+
+const makeBasicoPage = (title: string, subtitle: string, endpoint: string, tipo: string) => {
   const columns: Column<Record<string, unknown>>[] = [
-    { header: 'Nome', accessor: 'nome' },
-    { header: 'Código', accessor: 'codigo' },
-    { header: 'Documento', accessor: 'documento' },
-    { header: 'Ativo', accessor: 'ativo', type: 'boolean' },
-    { header: 'Cadastro', accessor: 'createdAt', type: 'datetime' },
+    { key: 'nome', label: 'Nome' },
+    ...(tiposComCodigo.has(tipo) ? [{ key: 'codigo', label: 'Código' }] : []),
+    { key: 'documento', label: 'Documento' },
+    ...(tiposPessoa.has(tipo) ? [{ key: 'email', label: 'E-mail' }, { key: 'telefone', label: 'Telefone' }] : []),
+    { key: 'ativo', label: 'Ativo' },
+    { key: 'createdAt', label: 'Cadastro' },
   ];
 
   const fields = [
     { name: 'nome', label: 'Nome' },
-    { name: 'codigo', label: 'Código', required: false },
-    { name: 'documento', label: 'CPF/CNPJ', mask: 'cpfCnpj', required: false },
+    ...(tiposComCodigo.has(tipo) ? [{ name: 'codigo', label: 'Código', required: false }] : []),
+    { name: 'documento', label: 'CPF/CNPJ', mask: 'cpfCnpj' as const, required: false },
+    ...(tiposPessoa.has(tipo)
+      ? [
+          { name: 'email', label: 'E-mail', type: 'email' as const, required: false },
+          { name: 'telefone', label: 'Telefone', mask: 'phone' as const, required: false },
+          { name: 'cidade', label: 'Cidade', required: false },
+          { name: 'uf', label: 'UF', required: false },
+        ]
+      : []),
   ];
 
-  const defaultValues = { nome: '', codigo: '', documento: '', ativo: true };
+  const defaultValues: Record<string, any> = { nome: '', documento: '', ativo: true };
+  if (tiposComCodigo.has(tipo)) defaultValues.codigo = '';
+  if (tiposPessoa.has(tipo)) {
+    defaultValues.email = '';
+    defaultValues.telefone = '';
+    defaultValues.cidade = '';
+    defaultValues.uf = '';
+  }
+
+  const lookupDocumento = async (doc: string) => {
+    const digits = sanitizeDocument(doc);
+    if (digits.length !== 14) return null;
+    try {
+      const resp = await http.get('/cadastros/pessoas/receita', { params: { cnpj: digits } });
+      const data = resp.data as Record<string, any>;
+      return {
+        nome: data.nome ?? '',
+        cidade: data.cidade ?? '',
+        uf: data.uf ?? '',
+        email: data.email ?? '',
+        telefone: data.telefone ?? '',
+        documento: digits,
+      };
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+      return null;
+    }
+  };
 
   return (
     <CadastroCrudPage
@@ -26,26 +82,28 @@ const makeBasicoPage = (title: string, subtitle: string, endpoint: string) => {
       columns={columns as Column<Record<string, unknown>>[]}
       fields={fields}
       defaultValues={defaultValues}
+      withExtras
+      onDocumentoLookup={lookupDocumento}
     />
   );
 };
 
-export const ConsultorasPage = () => makeBasicoPage('Consultoras', 'Cadastro de consultoras.', '/cadastros/basicos/Consultora');
-export const CustodiantePage = () => makeBasicoPage('Custodiantes', 'Cadastro de custodiantes.', '/cadastros/basicos/Custodiante');
-export const CertificadorasPage = () => makeBasicoPage('Certificadoras', 'Cadastro de certificadoras.', '/cadastros/basicos/Certificadora');
-export const GestorasPage = () => makeBasicoPage('Gestoras', 'Cadastro de gestoras.', '/cadastros/basicos/Gestora');
-export const FornecedoresPage = () => makeBasicoPage('Fornecedores', 'Cadastro de fornecedores.', '/cadastros/basicos/Fornecedor');
-export const RegistradorasPage = () => makeBasicoPage('Registradoras', 'Cadastro de registradoras.', '/cadastros/basicos/Registradora');
-export const CredenciadorasPage = () => makeBasicoPage('Credenciadoras', 'Cadastro de credenciadoras.', '/cadastros/basicos/Credenciadora');
-export const ProdutosPage = () => makeBasicoPage('Produtos', 'Cadastro de produtos.', '/cadastros/basicos/Produto');
-export const EmitentesPage = () => makeBasicoPage('Emitentes', 'Cadastro de emitentes.', '/cadastros/basicos/Emitente');
-export const WhiteListPage = () => makeBasicoPage('WhiteList', 'Cadastro de whitelist.', '/cadastros/basicos/WhiteList');
-export const BlackListPage = () => makeBasicoPage('Blacklist', 'Cadastro de blacklist.', '/cadastros/basicos/BlackList');
-export const PrestadoresPage = () => makeBasicoPage('Prestadores de Serviço', 'Cadastro de prestadores.', '/cadastros/basicos/PrestadorServico');
-export const DespesasPage = () => makeBasicoPage('Despesas', 'Cadastro de despesas.', '/cadastros/basicos/Despesa');
-export const GrupoEconomicoPage = () => makeBasicoPage('Grupo Econômico', 'Cadastro de grupos econômicos.', '/cadastros/basicos/GrupoEconomico');
-export const EsteiraCreditoPage = () => makeBasicoPage('Esteira de Crédito', 'Configuração da esteira de crédito.', '/cadastros/basicos/EsteiraCredito');
-export const IndicesDebenturePage = () => makeBasicoPage('Índices Debênture', 'Cadastro de índices.', '/cadastros/basicos/IndiceDebenture');
-export const InvestidoresPage = () => makeBasicoPage('Investidores', 'Cadastro de investidores.', '/cadastros/basicos/Investidor');
-export const SacadosPage = () => makeBasicoPage('Sacados', 'Cadastro de sacados.', '/cadastros/basicos/Sacado');
-export const TestemunhasPage = () => makeBasicoPage('Testemunhas', 'Cadastro de testemunhas.', '/cadastros/basicos/Testemunha');
+export const ConsultorasPage = () => makeBasicoPage('Consultoras', 'Cadastro de consultoras.', '/cadastros/consultoras', 'Consultora');
+export const CustodiantePage = () => makeBasicoPage('Custodiantes', 'Cadastro de custodiantes.', '/cadastros/basicos/Custodiante', 'Custodiante');
+export const CertificadorasPage = () => makeBasicoPage('Certificadoras', 'Cadastro de certificadoras.', '/cadastros/certificadoras', 'Certificadora');
+export const GestorasPage = () => makeBasicoPage('Gestoras', 'Cadastro de gestoras.', '/cadastros/basicos/Gestora', 'Gestora');
+export const FornecedoresPage = () => makeBasicoPage('Fornecedores', 'Cadastro de fornecedores.', '/cadastros/basicos/Fornecedor', 'Fornecedor');
+export const RegistradorasPage = () => makeBasicoPage('Registradoras', 'Cadastro de registradoras.', '/cadastros/basicos/Registradora', 'Registradora');
+export const CredenciadorasPage = () => makeBasicoPage('Credenciadoras', 'Cadastro de credenciadoras.', '/cadastros/basicos/Credenciadora', 'Credenciadora');
+export const ProdutosPage = () => makeBasicoPage('Produtos', 'Cadastro de produtos.', '/cadastros/basicos/Produto', 'Produto');
+export const EmitentesPage = () => makeBasicoPage('Emitentes', 'Cadastro de emitentes.', '/cadastros/basicos/Emitente', 'Emitente');
+export const WhiteListPage = () => makeBasicoPage('WhiteList', 'Cadastro de whitelist.', '/cadastros/basicos/WhiteList', 'WhiteList');
+export const BlackListPage = () => makeBasicoPage('Blacklist', 'Cadastro de blacklist.', '/cadastros/basicos/BlackList', 'BlackList');
+export const PrestadoresPage = () => makeBasicoPage('Prestadores de Serviço', 'Cadastro de prestadores.', '/cadastros/basicos/PrestadorServico', 'PrestadorServico');
+export const DespesasPage = () => makeBasicoPage('Despesas', 'Cadastro de despesas.', '/cadastros/basicos/Despesa', 'Despesa');
+export const GrupoEconomicoPage = () => makeBasicoPage('Grupo Econômico', 'Cadastro de grupos econômicos.', '/cadastros/basicos/GrupoEconomico', 'GrupoEconomico');
+export const EsteiraCreditoPage = () => makeBasicoPage('Esteira de Crédito', 'Configuração da esteira de crédito.', '/cadastros/basicos/EsteiraCredito', 'EsteiraCredito');
+export const IndicesDebenturePage = () => makeBasicoPage('Índices Debênture', 'Cadastro de índices.', '/cadastros/basicos/IndiceDebenture', 'IndiceDebenture');
+export const InvestidoresPage = () => makeBasicoPage('Investidores', 'Cadastro de investidores.', '/cadastros/basicos/Investidor', 'Investidor');
+export const SacadosPage = () => makeBasicoPage('Sacados', 'Cadastro de sacados.', '/cadastros/basicos/Sacado', 'Sacado');
+export const TestemunhasPage = () => makeBasicoPage('Testemunhas', 'Cadastro de testemunhas.', '/cadastros/testemunhas', 'Testemunha');

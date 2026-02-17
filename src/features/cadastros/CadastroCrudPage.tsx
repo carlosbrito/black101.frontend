@@ -6,7 +6,7 @@ import type { PagedResponse } from '../../shared/types/paging';
 import { DataTable } from '../../shared/ui/DataTable';
 import type { Column } from '../../shared/ui/DataTable';
 import { PageFrame } from '../../shared/ui/PageFrame';
-import { applyCpfCnpjMask, applyPhoneMask, isValidCpfCnpj, isValidPhone } from './cadastroCommon';
+import { applyCpfCnpjMask, applyPhoneMask, isValidCpfCnpj, isValidPhone, sanitizeDocument } from './cadastroCommon';
 import './cadastro.css';
 
 type FieldDef = {
@@ -42,6 +42,8 @@ export const CadastroCrudPage = ({
   columns,
   fields,
   defaultValues,
+  withExtras = false,
+  onDocumentoLookup,
 }: {
   title: string;
   subtitle: string;
@@ -49,6 +51,8 @@ export const CadastroCrudPage = ({
   columns: Column<CrudRecord>[];
   fields: FieldDef[];
   defaultValues: Record<string, string | boolean>;
+  withExtras?: boolean;
+  onDocumentoLookup?: (doc: string) => Promise<Record<string, any> | null>;
 }) => {
   const [rows, setRows] = useState<CrudRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +66,13 @@ export const CadastroCrudPage = ({
   const [current, setCurrent] = useState<CrudRecord | null>(null);
   const [form, setForm] = useState<Record<string, string | boolean>>(defaultValues);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [anexos, setAnexos] = useState<any[]>([]);
+  const [obs, setObs] = useState<any[]>([]);
+  const [historico, setHistorico] = useState<any[]>([]);
+  const [historicoPage, setHistoricoPage] = useState(1);
+  const [historicoTotalPages, setHistoricoTotalPages] = useState(1);
+  const [uploading, setUploading] = useState(false);
+  const [obsText, setObsText] = useState('');
 
   const applyFieldMask = (field: FieldDef, value: string): string => {
     if (field.mask === 'cpfCnpj') return applyCpfCnpjMask(value);
@@ -152,6 +163,9 @@ export const CadastroCrudPage = ({
     setForm(next);
     setFieldErrors({});
     setModalOpen(true);
+    if (withExtras) {
+      void loadExtras(row.id, 1);
+    }
   };
 
   const openDetails = (row: CrudRecord) => {
@@ -186,6 +200,76 @@ export const CadastroCrudPage = ({
 
       setModalOpen(false);
       await list();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const loadExtras = async (id: string, pageHist: number) => {
+    try {
+      const [anx, ob, hist] = await Promise.all([
+        http.get(`${endpoint}/${id}/anexos`),
+        http.get(`${endpoint}/${id}/observacoes`),
+        http.get(`${endpoint}/${id}/historico`, { params: { page: pageHist, pageSize: 10 } }),
+      ]);
+      setAnexos((anx.data as any[]) ?? []);
+      setObs((ob.data as any[]) ?? []);
+      const h = hist.data as any;
+      setHistorico((h.items ?? h.Items ?? []) as any[]);
+      setHistoricoPage(Number(h.page ?? h.Page ?? 1));
+      setHistoricoTotalPages(Number(h.totalPages ?? h.TotalPages ?? 1));
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const uploadAnexo = async (file: File) => {
+    if (!current) return;
+    setUploading(true);
+    try {
+      const data = new FormData();
+      data.append('file', file);
+      await http.post(`${endpoint}/${current.id}/anexos`, data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success('Anexo incluído.');
+      await loadExtras(current.id, historicoPage);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const deleteAnexo = async (anexoId: string) => {
+    if (!current) return;
+    if (!window.confirm('Remover anexo?')) return;
+    try {
+      await http.delete(`${endpoint}/${current.id}/anexos/${anexoId}`);
+      toast.success('Anexo removido.');
+      await loadExtras(current.id, historicoPage);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const addObs = async () => {
+    if (!current || !obsText.trim()) return;
+    try {
+      await http.post(`${endpoint}/${current.id}/observacoes`, { texto: obsText.trim() });
+      setObsText('');
+      await loadExtras(current.id, historicoPage);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const deleteObs = async (obsId: string) => {
+    if (!current) return;
+    if (!window.confirm('Remover observação?')) return;
+    try {
+      await http.delete(`${endpoint}/${current.id}/observacoes/${obsId}`);
+      await loadExtras(current.id, historicoPage);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -258,6 +342,30 @@ export const CadastroCrudPage = ({
                       }}
                       required={field.required ?? true}
                     />
+                    {field.mask === 'cpfCnpj' && onDocumentoLookup ? (
+                      <button
+                        type="button"
+                        className="btn-muted"
+                        onClick={() => {
+                          const raw = sanitizeDocument(String(form[field.name] ?? ''));
+                          if (raw.length !== 14) {
+                            toast.error('Informe um CNPJ válido para buscar na Receita.');
+                            return;
+                          }
+                          onDocumentoLookup(raw)
+                            ?.then((data) => {
+                              if (!data) {
+                                toast.error('CNPJ não encontrado.');
+                                return;
+                              }
+                              setForm((prev) => ({ ...prev, ...data }));
+                            })
+                            .catch((error) => toast.error(getErrorMessage(error)));
+                        }}
+                      >
+                        Buscar CNPJ
+                      </button>
+                    ) : null}
                     {fieldErrors[field.name] ? <small className="form-error">{fieldErrors[field.name]}</small> : null}
                   </label>
                 ))}
@@ -274,6 +382,82 @@ export const CadastroCrudPage = ({
                   </label>
                 ) : null}
               </div>
+
+              {withExtras && current ? (
+                <div className="extras">
+                  <h4>Anexos</h4>
+                  <div className="extras-row">
+                    <input
+                      type="file"
+                      disabled={uploading || readOnly}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void uploadAnexo(file);
+                      }}
+                    />
+                  </div>
+                  <ul className="extras-list">
+                    {anexos.map((a) => (
+                      <li key={a.id}>
+                        <span>{a.nomeArquivo ?? a.NomeArquivo}</span>
+                        {!readOnly ? (
+                          <button type="button" className="btn-muted" onClick={() => void deleteAnexo(a.id)}>
+                            Remover
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <h4>Observações</h4>
+                  <div className="extras-row">
+                    <textarea
+                      placeholder="Adicionar observação"
+                      disabled={readOnly}
+                      value={obsText}
+                      onChange={(e) => setObsText(e.target.value)}
+                    />
+                    {!readOnly ? (
+                      <button type="button" className="btn-main" onClick={() => void addObs()}>
+                        Incluir
+                      </button>
+                    ) : null}
+                  </div>
+                  <ul className="extras-list">
+                    {obs.map((o) => (
+                      <li key={o.id}>
+                        <div>
+                          <strong>{o.autorEmail ?? o.AutorEmail ?? '---'}</strong> —{' '}
+                          {new Date(o.createdAt ?? o.CreatedAt).toLocaleString()}
+                        </div>
+                        <div>{o.texto ?? o.Texto}</div>
+                        {!readOnly ? (
+                          <button type="button" className="btn-muted" onClick={() => void deleteObs(o.id)}>
+                            Remover
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <h4>Histórico</h4>
+                  <ul className="extras-list">
+                    {historico.map((h) => (
+                      <li key={h.id}>
+                        <div>
+                          <strong>{h.acao ?? h.Acao}</strong> — {h.entidade ?? h.Entidade} ({h.userEmail ?? h.UserEmail ?? '---'})
+                        </div>
+                        <div>{new Date(h.createdAt ?? h.CreatedAt).toLocaleString()} — {h.payloadJson ?? h.PayloadJson}</div>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="pager">
+                    <button disabled={historicoPage <= 1} onClick={() => { const p = historicoPage - 1; setHistoricoPage(p); void loadExtras(current.id, p); }}>Anterior</button>
+                    <span>{historicoPage} / {historicoTotalPages}</span>
+                    <button disabled={historicoPage >= historicoTotalPages} onClick={() => { const p = historicoPage + 1; setHistoricoPage(p); void loadExtras(current.id, p); }}>Próxima</button>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="modal-actions">
                 <button type="button" className="btn-muted" onClick={() => setModalOpen(false)}>Fechar</button>

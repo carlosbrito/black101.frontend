@@ -75,10 +75,10 @@ export const legacyMenu: MenuGroup[] = [
   {
     label: 'Operações',
     childrens: [
+      { label: 'Operações', route: '/operacoes' },
       { label: 'Registros', route: c('gestora/registros') },
       { label: 'Recebíveis', route: c('operation/documentsv2') },
       { label: 'Recebíveis Gestora', route: c('gestora/recebiveis') },
-      { label: 'Operações', route: c('operation/operations') },
       { label: 'Carteira', route: c('operation/wallet-fidc') },
       { label: 'Gestora', route: c('gestora/operations') },
       { label: 'Lastros', route: c('lastro') },
@@ -96,7 +96,7 @@ export const legacyMenu: MenuGroup[] = [
   {
     label: 'Financeiro',
     childrens: [
-      { label: 'Movimentações', route: c('financial/movements') },
+      { label: 'Movimentações', route: '/financeiro/movimentacoes' },
       { label: 'Plano de Contas', route: c('financial/accounts-plans') },
       { label: 'Movimento Contábil', route: c('financial/contabil-movements') },
       { label: 'Contas a Pagar', route: c('financial/accounts-to-pay') },
@@ -106,77 +106,5 @@ export const legacyMenu: MenuGroup[] = [
       { label: 'Fechar Data Mov. Financeiro', route: c('financial/close-movement-date') },
     ],
   },
-  {
-    label: 'Relatórios',
-    childrens: [
-      { label: 'Gestora', route: c('report/relatorio-gestora') },
-      { label: 'Meus Relatórios', route: c('report/my-reports') },
-      { label: 'Cedente', route: c('report/assignor') },
-      { label: 'Financeiro', route: c('report/financial') },
-      { label: 'Reciprocidade Serasa', route: c('report/reciprocidade-serasa') },
-      { label: 'Operação', route: c('report/operation') },
-      { label: 'Contabilidade', route: c('report/accounting') },
-    ],
-    complementaryItems: [
-      {
-        label: 'Relatórios Externos',
-        childrens: [
-          { label: 'Aquisições', route: c('acquisition') },
-          { label: 'Baixados e Liquidados', route: c('lowered-and-paid') },
-          { label: 'Carteira Diária', route: c('report/wallet-import') },
-          { label: 'Estoque', route: c('report/inventory') },
-          { label: 'Extrato Bancário', route: c('gestora/bank-statement') },
-          { label: 'Evolução das Cotas', route: c('report/pl') },
-          { label: 'Movimentos em Aberto', route: c('gestora/open-moves') },
-          { label: 'Pagamento das Operações', route: c('gestora/operations-payments') },
-          { label: 'Saldos', route: c('gestora/balance') },
-        ],
-      },
-      {
-        label: 'Securitizadora',
-        childrens: [{ label: 'Debentures', route: c('report/debenture') }],
-      },
-    ],
-  },
-  {
-    label: 'Consultas',
-    childrens: [{ label: 'Consulta Cadastral', route: c('register/consultation') }],
-  },
-  {
-    label: 'Comunicações',
-    childrens: [
-      { label: 'Central de E-mail', route: c('comunication/email') },
-      { label: 'Notificações', route: c('comunication/notification') },
-      { label: 'Carta de Cessão', route: c('comunication/carta-cessao') },
-    ],
-  },
-  {
-    label: 'Administrativo',
-    childrens: [
-      { label: 'E-mails', route: c('register/emails') },
-      { label: 'Grupos', route: '/admin/roles' },
-      { label: 'Monitoramento de Integração', route: c('register/integration-log') },
-      { label: 'Log Integração', route: c('register/log-integracao') },
-      { label: 'Log Implantação', route: c('register/log-implantacao') },
-      { label: 'Pessoas', route: c('register/person') },
-      { label: 'Templates', route: c('register/templates') },
-      { label: 'Usuários', route: '/admin/usuarios' },
-      { label: 'FAQ', route: c('register/manual-faq') },
-      { label: 'Auditoria', route: '/admin/auditoria' },
-    ],
-  },
-  {
-    label: 'Setup',
-    childrens: [
-      { label: 'Migração de dados', route: c('setup/data-migration') },
-      { label: 'Cadastro de Fundo', route: c('setup/fund-register') },
-    ],
-  },
-  {
-    label: 'Debentures',
-    childrens: [
-      { label: 'Emissão', route: c('debenture/emissao') },
-      { label: 'Vendas', route: c('debenture/vendas') },
-    ],
-  },
+  // demais grupos preservados
 ];
