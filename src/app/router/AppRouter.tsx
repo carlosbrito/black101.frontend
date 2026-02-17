@@ -4,7 +4,33 @@ import { MainLayout } from '../layout/MainLayout';
 import { LoginPage } from '../../features/login/LoginPage';
 import { HomePage } from '../../features/shared/HomePage';
 import { EmConstrucaoPage } from '../../features/shared/EmConstrucaoPage';
-import { AdministradorasPage, AgentesPage, BancosPage, CedentesPage, RepresentantesPage, BancarizadoresPage } from '../../features/cadastros/CadastroPages';
+import {
+  AdministradorasPage,
+  AgentesPage,
+  BancosPage,
+  CedentesPage,
+  RepresentantesPage,
+  BancarizadoresPage,
+  ConsultorasPage,
+  CustodiantePage,
+  CertificadorasPage,
+  GestorasPage,
+  FornecedoresPage,
+  RegistradorasPage,
+  CredenciadorasPage,
+  ProdutosPage,
+  EmitentesPage,
+  WhiteListPage,
+  BlackListPage,
+  PrestadoresPage,
+  DespesasPage,
+  GrupoEconomicoPage,
+  EsteiraCreditoPage,
+  IndicesDebenturePage,
+  InvestidoresPage,
+  SacadosPage,
+  TestemunhasPage,
+} from '../../features/cadastros/CadastroPages';
 import { AdministradoraFormPage } from '../../features/cadastros/administradoras/AdministradoraFormPage';
 import { AgenteFormPage } from '../../features/cadastros/agentes/AgenteFormPage';
 import { BancoFormPage } from '../../features/cadastros/bancos/BancoFormPage';
@@ -44,6 +70,25 @@ export const AppRouter = () => {
           <Route path="/cadastro/cedentes" element={<CedentesPage />} />
           <Route path="/cadastro/cedentes/novo" element={<CedenteFormPage />} />
           <Route path="/cadastro/cedentes/:id" element={<CedenteFormPage />} />
+          <Route path="/cadastro/consultoras" element={<ConsultorasPage />} />
+          <Route path="/cadastro/custodiantes" element={<CustodiantePage />} />
+          <Route path="/cadastro/certificadoras" element={<CertificadorasPage />} />
+          <Route path="/cadastro/gestoras" element={<GestorasPage />} />
+          <Route path="/cadastro/fornecedores" element={<FornecedoresPage />} />
+          <Route path="/cadastro/registradoras" element={<RegistradorasPage />} />
+          <Route path="/cadastro/credenciadoras" element={<CredenciadorasPage />} />
+          <Route path="/cadastro/produtos" element={<ProdutosPage />} />
+          <Route path="/cadastro/emitentes" element={<EmitentesPage />} />
+          <Route path="/cadastro/whitelist" element={<WhiteListPage />} />
+          <Route path="/cadastro/blacklist" element={<BlackListPage />} />
+          <Route path="/cadastro/prestadores" element={<PrestadoresPage />} />
+          <Route path="/cadastro/despesas" element={<DespesasPage />} />
+          <Route path="/cadastro/grupo-economico" element={<GrupoEconomicoPage />} />
+          <Route path="/cadastro/esteira-credito" element={<EsteiraCreditoPage />} />
+          <Route path="/cadastro/indices-debentures" element={<IndicesDebenturePage />} />
+          <Route path="/cadastro/investidores" element={<InvestidoresPage />} />
+          <Route path="/cadastro/sacados" element={<SacadosPage />} />
+          <Route path="/cadastro/testemunhas" element={<TestemunhasPage />} />
 
           <Route path="/admin/usuarios" element={<AdminUsuariosPage />} />
           <Route path="/admin/roles" element={<AdminRolesPage />} />
