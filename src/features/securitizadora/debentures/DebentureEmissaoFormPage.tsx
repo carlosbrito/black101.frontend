@@ -23,7 +23,7 @@ type EmissaoFormState = {
   nomeEmissao: string;
   dataEmissao: string;
   valorTotal: string;
-  quantidadeTotal: string;
+  valorPu: string;
   status: DebentureStatusEmissao;
   observacoes: string;
 };
@@ -53,7 +53,7 @@ const emptyEmissaoForm: EmissaoFormState = {
   nomeEmissao: '',
   dataEmissao: '',
   valorTotal: '',
-  quantidadeTotal: '',
+  valorPu: '',
   status: DebentureStatusEmissao.Rascunho,
   observacoes: '',
 };
@@ -80,6 +80,29 @@ const emptyEscrituraForm: EscrituraFormState = {
 const toDateInput = (value?: string | null) => (value ? value.slice(0, 10) : '');
 
 const toDecimal = (value: string) => Number(value.replace(',', '.'));
+const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const maskCurrencyInput = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+  return currencyFormatter.format(Number(digits) / 100);
+};
+
+const parseCurrencyToDecimal = (value: string) => {
+  if (!value.trim()) return 0;
+  const normalized = value
+    .replace(/\s/g, '')
+    .replace('R$', '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCurrencyFromDecimal = (value?: number | null) => {
+  if (value === null || value === undefined) return '';
+  return currencyFormatter.format(value);
+};
 
 export const DebentureEmissaoFormPage = () => {
   const params = useParams<{ id: string }>();
@@ -104,8 +127,8 @@ export const DebentureEmissaoFormPage = () => {
       numeroEmissao: data.numeroEmissao ?? '',
       nomeEmissao: data.nomeEmissao ?? '',
       dataEmissao: toDateInput(data.dataEmissao),
-      valorTotal: String(data.valorTotal ?? ''),
-      quantidadeTotal: String(data.quantidadeTotal ?? ''),
+      valorTotal: formatCurrencyFromDecimal(data.valorTotal),
+      valorPu: formatCurrencyFromDecimal(data.valorPu),
       status: data.status,
       observacoes: data.observacoes ?? '',
     });
@@ -139,6 +162,16 @@ export const DebentureEmissaoFormPage = () => {
     void load();
   }, [emissaoId]);
 
+  const quantidadeTotalCalculada = useMemo(() => {
+    const valorTotal = parseCurrencyToDecimal(emissaoForm.valorTotal);
+    const valorPu = parseCurrencyToDecimal(emissaoForm.valorPu);
+    if (valorTotal <= 0 || valorPu <= 0) {
+      return 0;
+    }
+
+    return Math.floor(valorTotal / valorPu);
+  }, [emissaoForm.valorPu, emissaoForm.valorTotal]);
+
   const ensureEmissaoValid = () => {
     if (!emissaoForm.numeroEmissao.trim()) {
       toast.error('Informe o número da emissão.');
@@ -155,13 +188,18 @@ export const DebentureEmissaoFormPage = () => {
       return false;
     }
 
-    if (toDecimal(emissaoForm.valorTotal) <= 0) {
+    if (parseCurrencyToDecimal(emissaoForm.valorTotal) <= 0) {
       toast.error('Informe o valor total da emissão.');
       return false;
     }
 
-    if (Number(emissaoForm.quantidadeTotal) <= 0) {
-      toast.error('Informe a quantidade total da emissão.');
+    if (parseCurrencyToDecimal(emissaoForm.valorPu) <= 0) {
+      toast.error('Informe o valor do PU.');
+      return false;
+    }
+
+    if (quantidadeTotalCalculada <= 0) {
+      toast.error('A quantidade total calculada deve ser maior que zero.');
       return false;
     }
 
@@ -181,8 +219,8 @@ export const DebentureEmissaoFormPage = () => {
         numeroEmissao: emissaoForm.numeroEmissao.trim(),
         nomeEmissao: emissaoForm.nomeEmissao.trim(),
         dataEmissao: emissaoForm.dataEmissao,
-        valorTotal: toDecimal(emissaoForm.valorTotal),
-        quantidadeTotal: Number(emissaoForm.quantidadeTotal),
+        valorTotal: parseCurrencyToDecimal(emissaoForm.valorTotal),
+        valorPu: parseCurrencyToDecimal(emissaoForm.valorPu),
         status: Number(emissaoForm.status),
         observacoes: emissaoForm.observacoes.trim() || null,
       };
@@ -407,11 +445,29 @@ export const DebentureEmissaoFormPage = () => {
               </label>
               <label>
                 <span>Valor Total</span>
-                <input type="number" min="0" step="0.01" value={emissaoForm.valorTotal} onChange={(event) => setEmissaoForm((prev) => ({ ...prev, valorTotal: event.target.value }))} required />
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="R$ 0,00"
+                  value={emissaoForm.valorTotal}
+                  onChange={(event) => setEmissaoForm((prev) => ({ ...prev, valorTotal: maskCurrencyInput(event.target.value) }))}
+                  required
+                />
               </label>
               <label>
-                <span>Quantidade Total</span>
-                <input type="number" min="1" step="1" value={emissaoForm.quantidadeTotal} onChange={(event) => setEmissaoForm((prev) => ({ ...prev, quantidadeTotal: event.target.value }))} required />
+                <span>Valor do PU</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="R$ 0,00"
+                  value={emissaoForm.valorPu}
+                  onChange={(event) => setEmissaoForm((prev) => ({ ...prev, valorPu: maskCurrencyInput(event.target.value) }))}
+                  required
+                />
+              </label>
+              <label>
+                <span>Quantidade Total (calculada)</span>
+                <input type="text" value={quantidadeTotalCalculada.toString()} readOnly />
               </label>
               <label>
                 <span>Status</span>

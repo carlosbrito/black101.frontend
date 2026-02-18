@@ -57,6 +57,7 @@ export type DebentureEmissaoListDto = {
   nomeEmissao: string;
   dataEmissao: string;
   valorTotal: number;
+  valorPu: number;
   quantidadeTotal: number;
   status: DebentureStatusEmissao;
   seriesCount: number;
