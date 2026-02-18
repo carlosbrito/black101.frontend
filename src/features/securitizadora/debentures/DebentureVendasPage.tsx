@@ -45,10 +45,9 @@ export const DebentureVendasPage = () => {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     void list();
-  }, [page, pageSize]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deleteRow = async (row: DebentureVendaDto) => {
     if (!window.confirm(`Remover venda de ${row.investidorNome}?`)) return;
@@ -108,3 +107,5 @@ export const DebentureVendasPage = () => {
     </PageFrame>
   );
 };
+
+

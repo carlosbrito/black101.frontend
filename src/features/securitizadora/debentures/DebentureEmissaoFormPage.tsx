@@ -157,10 +157,9 @@ export const DebentureEmissaoFormPage = () => {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     void load();
-  }, [emissaoId]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const quantidadeTotalCalculada = useMemo(() => {
     const valorTotal = parseCurrencyToDecimal(emissaoForm.valorTotal);
@@ -170,7 +169,7 @@ export const DebentureEmissaoFormPage = () => {
     }
 
     return Math.floor(valorTotal / valorPu);
-  }, [emissaoForm.valorPu, emissaoForm.valorTotal]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureEmissaoValid = () => {
     if (!emissaoForm.numeroEmissao.trim()) {
@@ -387,7 +386,7 @@ export const DebentureEmissaoFormPage = () => {
   const pageTitle = useMemo(() => {
     if (!isEdit) return 'Nova Emissão de Debêntures';
     return emissaoForm.nomeEmissao ? `Emissão: ${emissaoForm.nomeEmissao}` : 'Editar Emissão de Debêntures';
-  }, [isEdit, emissaoForm.nomeEmissao]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const changeTab = (nextTab: TabKey) => {
     if (!canAccessSubTabs && nextTab !== 'emissao') {
@@ -640,3 +639,5 @@ export const DebentureEmissaoFormPage = () => {
     </PageFrame>
   );
 };
+
+

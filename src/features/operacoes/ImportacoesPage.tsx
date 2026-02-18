@@ -108,10 +108,9 @@ export const ImportacoesPage = () => {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     void list();
-  }, [page, pageSize]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadCedentesAtivos = async () => {
     setCedentesLoading(true);
@@ -135,7 +134,6 @@ export const ImportacoesPage = () => {
       setCedentesLoading(false);
     }
   };
-
   useEffect(() => {
     void loadCedentesAtivos();
   }, []);
@@ -154,8 +152,7 @@ export const ImportacoesPage = () => {
     return () => {
       if (polling) window.clearInterval(polling);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, polling]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const computeHash = async (f: File) => {
     const buffer = await f.arrayBuffer();
@@ -416,3 +413,5 @@ export const ImportacoesPage = () => {
     </PageFrame>
   );
 };
+
+

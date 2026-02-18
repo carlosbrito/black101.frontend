@@ -117,7 +117,6 @@ export const AgenteFormPage = () => {
       }));
     }
   };
-
   useEffect(() => {
     const bootstrap = async () => {
       if (!agenteId) {
@@ -145,12 +144,11 @@ export const AgenteFormPage = () => {
     };
 
     void bootstrap();
-  }, [agenteId]);
-
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!agenteId || activeTab !== 'historico') return;
     void loadHistorico(agenteId, historicoPaged.page);
-  }, [agenteId, activeTab]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureValidForm = () => {
     if (!form.nome.trim()) {
@@ -386,3 +384,5 @@ export const AgenteFormPage = () => {
     </PageFrame>
   );
 };
+
+

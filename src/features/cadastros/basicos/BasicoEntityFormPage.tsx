@@ -114,7 +114,6 @@ export const BasicoEntityFormPage = ({ title, endpoint, listRoute, singularLabel
 
     setHistoricoPaged(readPagedResponse<HistoricoItemDto>(historicoRes.data));
   };
-
   useEffect(() => {
     const bootstrap = async () => {
       if (!cadastroId) {
@@ -146,12 +145,11 @@ export const BasicoEntityFormPage = ({ title, endpoint, listRoute, singularLabel
     };
 
     void bootstrap();
-  }, [cadastroId, endpoint]);
-
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!cadastroId || activeTab !== 'historico') return;
     void loadHistorico(cadastroId, historicoPaged.page);
-  }, [cadastroId, activeTab]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureValidForm = () => {
     if (!form.nome.trim()) {
@@ -559,3 +557,5 @@ export const BasicoEntityFormPage = ({ title, endpoint, listRoute, singularLabel
     </PageFrame>
   );
 };
+
+

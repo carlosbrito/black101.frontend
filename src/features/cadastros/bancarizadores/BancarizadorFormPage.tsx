@@ -117,7 +117,6 @@ export const BancarizadorFormPage = () => {
       }));
     }
   };
-
   useEffect(() => {
     const bootstrap = async () => {
       if (!bancarizadorId) {
@@ -145,12 +144,11 @@ export const BancarizadorFormPage = () => {
     };
 
     void bootstrap();
-  }, [bancarizadorId]);
-
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!bancarizadorId || activeTab !== 'historico') return;
     void loadHistorico(bancarizadorId, historicoPaged.page);
-  }, [bancarizadorId, activeTab]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureValidForm = () => {
     if (!form.nome.trim()) {
@@ -386,3 +384,5 @@ export const BancarizadorFormPage = () => {
     </PageFrame>
   );
 };
+
+

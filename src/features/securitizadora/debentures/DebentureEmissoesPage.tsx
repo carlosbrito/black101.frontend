@@ -45,10 +45,9 @@ export const DebentureEmissoesPage = () => {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     void list();
-  }, [page, pageSize]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deleteRow = async (row: DebentureEmissaoListDto) => {
     if (!window.confirm(`Remover emissão ${row.numeroEmissao}?`)) return;
@@ -108,3 +107,5 @@ export const DebentureEmissoesPage = () => {
     </PageFrame>
   );
 };
+
+

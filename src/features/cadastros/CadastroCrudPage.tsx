@@ -156,10 +156,9 @@ export const CadastroCrudPage = ({
       setLoading(false);
     }
   };
-
   useEffect(() => {
     void list();
-  }, [page, pageSize]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openEditById = async (id: string) => {
     const response = await http.get(`${endpoint}/${id}`);
@@ -572,3 +571,5 @@ export const CadastroCrudPage = ({
     </PageFrame>
   );
 };
+
+

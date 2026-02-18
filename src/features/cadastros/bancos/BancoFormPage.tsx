@@ -82,7 +82,6 @@ export const BancoFormPage = () => {
       }));
     }
   };
-
   useEffect(() => {
     const bootstrap = async () => {
       if (!bancoId) {
@@ -107,12 +106,11 @@ export const BancoFormPage = () => {
     };
 
     void bootstrap();
-  }, [bancoId]);
-
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!bancoId || activeTab !== 'historico') return;
     void loadHistorico(bancoId, historicoPaged.page);
-  }, [bancoId, activeTab]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureValidForm = () => {
     if (!form.nome.trim()) {
@@ -319,3 +317,5 @@ export const BancoFormPage = () => {
     </PageFrame>
   );
 };
+
+

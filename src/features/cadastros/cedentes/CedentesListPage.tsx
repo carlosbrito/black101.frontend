@@ -72,10 +72,9 @@ export const CedentesPage = () => {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     void load();
-  }, [page, pageSize]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pagesLabel = useMemo(() => `${page} de ${totalPages}`, [page, totalPages]);
 
@@ -215,3 +214,5 @@ export const CedentesPage = () => {
     </PageFrame>
   );
 };
+
+

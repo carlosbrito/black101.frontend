@@ -45,10 +45,9 @@ export const DebentureResgatesPage = () => {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     void list();
-  }, [page, pageSize]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deleteRow = async (row: DebentureResgateDto) => {
     if (!window.confirm('Remover resgate selecionado?')) return;
@@ -108,3 +107,5 @@ export const DebentureResgatesPage = () => {
     </PageFrame>
   );
 };
+
+

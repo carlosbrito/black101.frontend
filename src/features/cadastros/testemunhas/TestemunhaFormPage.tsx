@@ -117,7 +117,6 @@ export const TestemunhaFormPage = () => {
       }));
     }
   };
-
   useEffect(() => {
     const bootstrap = async () => {
       if (!testemunhaId) {
@@ -145,12 +144,11 @@ export const TestemunhaFormPage = () => {
     };
 
     void bootstrap();
-  }, [testemunhaId]);
-
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!testemunhaId || activeTab !== 'historico') return;
     void loadHistorico(testemunhaId, historicoPaged.page);
-  }, [testemunhaId, activeTab]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureValidForm = () => {
     if (!form.nome.trim()) {
@@ -380,3 +378,5 @@ export const TestemunhaFormPage = () => {
     </PageFrame>
   );
 };
+
+

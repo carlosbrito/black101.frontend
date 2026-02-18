@@ -86,11 +86,9 @@ export const DebentureVendaFormPage = () => {
       setSeries([]);
     }
   };
-
   useEffect(() => {
     void loadEmissoes();
   }, []);
-
   useEffect(() => {
     const bootstrap = async () => {
       if (!vendaId) return;
@@ -128,15 +126,14 @@ export const DebentureVendaFormPage = () => {
     };
 
     void bootstrap();
-  }, [vendaId]);
-
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isEdit) return;
 
     if (form.debentureEmissaoId) {
       void loadSeries(form.debentureEmissaoId);
     }
-  }, [form.debentureEmissaoId, isEdit]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureValid = () => {
     if (!form.debentureEmissaoId) {
@@ -374,3 +371,5 @@ export const DebentureVendaFormPage = () => {
     </PageFrame>
   );
 };
+
+
