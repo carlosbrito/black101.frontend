@@ -139,4 +139,13 @@ export const legacyMenu: MenuGroup[] = [
       },
     ],
   },
+  {
+    label: 'Administrativo',
+    childrens: [
+      { label: 'Templates', route: '/admin/templates' },
+      { label: 'Usuários', route: '/admin/usuarios' },
+      { label: 'Grupos', route: '/admin/roles' },
+      { label: 'Auditoria', route: '/admin/auditoria' },
+    ],
+  },
 ];

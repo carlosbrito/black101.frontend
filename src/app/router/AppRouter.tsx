@@ -60,6 +60,8 @@ import {
 import { AdminUsuariosPage } from '../../features/admin/AdminUsuariosPage';
 import { AdminRolesPage } from '../../features/admin/AdminRolesPage';
 import { AdminAuditoriaPage } from '../../features/admin/AdminAuditoriaPage';
+import { AdminTemplatesListPage } from '../../features/admin/templates/AdminTemplatesListPage';
+import { AdminTemplateFormPage } from '../../features/admin/templates/AdminTemplateFormPage';
 import { DebentureEmissoesPage } from '../../features/securitizadora/debentures/DebentureEmissoesPage';
 import { DebentureEmissaoFormPage } from '../../features/securitizadora/debentures/DebentureEmissaoFormPage';
 import { DebentureVendasPage } from '../../features/securitizadora/debentures/DebentureVendasPage';
@@ -154,6 +156,9 @@ export const AppRouter = () => {
           <Route path="/admin/usuarios" element={<AdminUsuariosPage />} />
           <Route path="/admin/roles" element={<AdminRolesPage />} />
           <Route path="/admin/auditoria" element={<AdminAuditoriaPage />} />
+          <Route path="/admin/templates" element={<AdminTemplatesListPage />} />
+          <Route path="/admin/templates/novo" element={<AdminTemplateFormPage />} />
+          <Route path="/admin/templates/:id" element={<AdminTemplateFormPage />} />
           <Route element={<SecuritizadoraRoute />}>
             <Route path="/securitizadora/debentures/emissoes" element={<DebentureEmissoesPage />} />
             <Route path="/securitizadora/debentures/emissoes/novo" element={<DebentureEmissaoFormPage />} />
