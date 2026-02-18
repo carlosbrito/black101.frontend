@@ -1,10 +1,23 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../shared/api/http';
-import type { PagedResponse } from '../../shared/types/paging';
 import { PageFrame } from '../../shared/ui/PageFrame';
 
 type UserItem = { id: string; nomeCompleto: string; email: string; ativo: boolean };
+type ApiUserItem = {
+  id?: string;
+  Id?: string;
+  nomeCompleto?: string;
+  NomeCompleto?: string;
+  email?: string;
+  Email?: string;
+  ativo?: boolean;
+  Ativo?: boolean;
+};
+type UsersResponse = {
+  items?: ApiUserItem[];
+  Items?: ApiUserItem[];
+};
 
 export const AdminUsuariosPage = () => {
   const [rows, setRows] = useState<UserItem[]>([]);
@@ -13,13 +26,14 @@ export const AdminUsuariosPage = () => {
   const list = async () => {
     setLoading(true);
     try {
-      const response = await http.get<PagedResponse<UserItem>>('/admin/usuarios', { params: { page: 1, pageSize: 30 } });
-      const data = response.data as any;
-      setRows((data.items ?? []).map((x: any) => ({
-        id: String(x.id ?? x.Id),
-        nomeCompleto: x.nomeCompleto ?? x.NomeCompleto,
-        email: x.email ?? x.Email,
-        ativo: x.ativo ?? x.Ativo,
+      const response = await http.get<UsersResponse>('/admin/usuarios', { params: { page: 1, pageSize: 30 } });
+      const data = response.data;
+      const source = data.items ?? data.Items ?? [];
+      setRows(source.map((item) => ({
+        id: String(item.id ?? item.Id),
+        nomeCompleto: String(item.nomeCompleto ?? item.NomeCompleto ?? ''),
+        email: String(item.email ?? item.Email ?? ''),
+        ativo: Boolean(item.ativo ?? item.Ativo),
       })));
     } catch (error) {
       toast.error(getErrorMessage(error));

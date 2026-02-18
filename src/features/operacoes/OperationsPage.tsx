@@ -5,7 +5,19 @@ import { DataTable } from '../../shared/ui/DataTable';
 import type { Column } from '../../shared/ui/DataTable';
 import { PageFrame } from '../../shared/ui/PageFrame';
 
-const columns: Column<{ id: string; [key: string]: any }>[] = [
+type OperacaoRow = {
+  id: string;
+  numero: string;
+  descricao: string;
+  valor: number;
+  dataOperacao: string;
+  status: string;
+};
+
+type OperacaoForm = Omit<OperacaoRow, 'id'>;
+type OperacaoListResponse = { items?: OperacaoRow[]; Items?: OperacaoRow[] };
+
+const columns: Column<OperacaoRow>[] = [
   { key: 'numero', label: 'Número' },
   { key: 'descricao', label: 'Descrição' },
   { key: 'valor', label: 'Valor' },
@@ -13,7 +25,7 @@ const columns: Column<{ id: string; [key: string]: any }>[] = [
   { key: 'status', label: 'Status' },
 ];
 
-const defaultForm = {
+const defaultForm: OperacaoForm = {
   numero: '',
   descricao: '',
   valor: 0,
@@ -22,18 +34,18 @@ const defaultForm = {
 };
 
 export const OperacoesPage = () => {
-  const [rows, setRows] = useState<{ id: string; [key: string]: any }[]>([]);
+  const [rows, setRows] = useState<OperacaoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [current, setCurrent] = useState<{ id: string; [key: string]: any } | null>(null);
-  const [form, setForm] = useState<Record<string, any>>(defaultForm);
+  const [current, setCurrent] = useState<OperacaoRow | null>(null);
+  const [form, setForm] = useState<OperacaoForm>(defaultForm);
 
   const list = async () => {
     setLoading(true);
     try {
-      const response = await http.get('/operacoes');
-      const items = (response.data.items ?? response.data.Items ?? []) as any[];
-      setRows(items.map((i) => ({ ...i, id: i.id })));
+      const response = await http.get<OperacaoListResponse>('/operacoes');
+      const items = response.data.items ?? response.data.Items ?? [];
+      setRows(items.map((item) => ({ ...item, id: String(item.id) })));
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -51,7 +63,7 @@ export const OperacoesPage = () => {
     setModalOpen(true);
   };
 
-  const openEdit = (row: any) => {
+  const openEdit = (row: OperacaoRow) => {
     setCurrent(row);
     setForm({
       numero: row.numero,
@@ -80,7 +92,7 @@ export const OperacoesPage = () => {
     }
   };
 
-  const onDelete = async (row: any) => {
+  const onDelete = async (row: OperacaoRow) => {
     if (!window.confirm('Excluir operação?')) return;
     try {
       await http.delete(`/operacoes/${row.id}`);

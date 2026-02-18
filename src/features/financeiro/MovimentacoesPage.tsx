@@ -5,7 +5,22 @@ import { DataTable } from '../../shared/ui/DataTable';
 import type { Column } from '../../shared/ui/DataTable';
 import { PageFrame } from '../../shared/ui/PageFrame';
 
-const columns: Column<{ id: string; [key: string]: any }>[] = [
+type MovimentacaoRow = {
+  id: string;
+  numeroDocumento: string;
+  tipoMovimento: string;
+  dataMovimento: string;
+  descricao: string;
+  valorDespesa: number;
+  valorRecebimento: number;
+  dataPagamento?: string | null;
+  dataVencimento?: string | null;
+};
+
+type MovimentacaoForm = Omit<MovimentacaoRow, 'id'>;
+type MovimentacaoListResponse = { items?: MovimentacaoRow[]; Items?: MovimentacaoRow[] };
+
+const columns: Column<MovimentacaoRow>[] = [
   { key: 'numeroDocumento', label: 'Número' },
   { key: 'tipoMovimento', label: 'Tipo' },
   { key: 'dataMovimento', label: 'Data' },
@@ -14,7 +29,7 @@ const columns: Column<{ id: string; [key: string]: any }>[] = [
   { key: 'valorRecebimento', label: 'Recebimento' },
 ];
 
-const defaultForm = {
+const defaultForm: MovimentacaoForm = {
   numeroDocumento: '',
   tipoMovimento: 'Credito',
   dataMovimento: new Date().toISOString().substring(0, 10),
@@ -24,18 +39,18 @@ const defaultForm = {
 };
 
 export const MovimentacoesPage = () => {
-  const [rows, setRows] = useState<{ id: string; [key: string]: any }[]>([]);
+  const [rows, setRows] = useState<MovimentacaoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [current, setCurrent] = useState<{ id: string; [key: string]: any } | null>(null);
-  const [form, setForm] = useState<Record<string, any>>(defaultForm);
+  const [current, setCurrent] = useState<MovimentacaoRow | null>(null);
+  const [form, setForm] = useState<MovimentacaoForm>(defaultForm);
 
   const list = async () => {
     setLoading(true);
     try {
-      const response = await http.get('/financeiro/movimentacoes');
-      const items = (response.data.items ?? response.data.Items ?? []) as any[];
-      setRows(items.map((i) => ({ ...i, id: i.id })));
+      const response = await http.get<MovimentacaoListResponse>('/financeiro/movimentacoes');
+      const items = response.data.items ?? response.data.Items ?? [];
+      setRows(items.map((item) => ({ ...item, id: String(item.id) })));
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -53,7 +68,7 @@ export const MovimentacoesPage = () => {
     setModalOpen(true);
   };
 
-  const openEdit = (row: any) => {
+  const openEdit = (row: MovimentacaoRow) => {
     setCurrent(row);
     setForm({
       numeroDocumento: row.numeroDocumento,
@@ -83,7 +98,7 @@ export const MovimentacoesPage = () => {
     }
   };
 
-  const onDelete = async (row: any) => {
+  const onDelete = async (row: MovimentacaoRow) => {
     if (!window.confirm('Excluir movimentação?')) return;
     try {
       await http.delete(`/financeiro/movimentacoes/${row.id}`);

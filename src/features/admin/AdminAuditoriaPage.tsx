@@ -3,13 +3,31 @@ import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../shared/api/http';
 import { PageFrame } from '../../shared/ui/PageFrame';
 
+type AuditItem = {
+  id?: string;
+  Id?: string;
+  createdAt?: string;
+  CreatedAt?: string;
+  acao?: string;
+  Acao?: string;
+  entidade?: string;
+  Entidade?: string;
+  traceId?: string;
+  TraceId?: string;
+};
+
+type AuditListResponse = {
+  items?: AuditItem[];
+  Items?: AuditItem[];
+};
+
 export const AdminAuditoriaPage = () => {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<AuditItem[]>([]);
 
   const list = async () => {
     try {
-      const response = await http.get('/admin/auditoria', { params: { page: 1, pageSize: 30 } });
-      const data = response.data as any;
+      const response = await http.get<AuditListResponse>('/admin/auditoria', { params: { page: 1, pageSize: 30 } });
+      const data = response.data;
       setItems(data.items ?? []);
     } catch (error) {
       toast.error(getErrorMessage(error));

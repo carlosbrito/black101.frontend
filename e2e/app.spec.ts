@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-type RecordItem = { id: string; [key: string]: any };
+type RecordItem = { id: string; [key: string]: unknown };
 
 const createId = () => `${Date.now()}${Math.floor(Math.random() * 100000)}`;
 

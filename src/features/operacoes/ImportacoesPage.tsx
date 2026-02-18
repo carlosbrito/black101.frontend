@@ -30,6 +30,26 @@ type CedenteAtivoOption = {
   cnpjCpf: string;
 };
 
+type ImportacoesListResponse = {
+  items?: ImportacaoItem[];
+  Items?: ImportacaoItem[];
+  totalPages?: number;
+  TotalPages?: number;
+};
+
+type CedenteAtivoApiItem = {
+  id?: string;
+  Id?: string;
+  nome?: string;
+  Nome?: string;
+  cnpjCpf?: string;
+  CnpjCpf?: string;
+};
+
+type CreateImportacaoResponse = {
+  importacaoId?: string;
+};
+
 const inferTipoArquivo = (fileName: string) => {
   const ext = fileName.split('.').pop()?.toLowerCase();
   if (ext === 'xml') return 'XML';
@@ -75,11 +95,11 @@ export const ImportacoesPage = () => {
   const list = async () => {
     setLoading(true);
     try {
-      const response = await http.get('/operacoes/importacoes', {
+      const response = await http.get<ImportacoesListResponse>('/operacoes/importacoes', {
         params: { page, pageSize },
       });
-      const data = response.data as any;
-      const items = (data.items ?? data.Items ?? []) as ImportacaoItem[];
+      const data = response.data;
+      const items = data.items ?? data.Items ?? [];
       setRows(items);
       setTotalPages(Number(data.totalPages ?? data.TotalPages ?? 1));
     } catch (error) {
@@ -96,8 +116,8 @@ export const ImportacoesPage = () => {
   const loadCedentesAtivos = async () => {
     setCedentesLoading(true);
     try {
-      const response = await http.get('/cadastros/cedentes/ativos');
-      const data = (response.data ?? []) as any[];
+      const response = await http.get<CedenteAtivoApiItem[]>('/cadastros/cedentes/ativos');
+      const data = response.data ?? [];
       const options: CedenteAtivoOption[] = data.map((item) => ({
         id: String(item.id ?? item.Id ?? ''),
         nome: String(item.nome ?? item.Nome ?? ''),
@@ -134,6 +154,7 @@ export const ImportacoesPage = () => {
     return () => {
       if (polling) window.clearInterval(polling);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, polling]);
 
   const computeHash = async (f: File) => {
@@ -150,7 +171,7 @@ export const ImportacoesPage = () => {
     try {
       const hash = await computeHash(inputFile);
       setFileHash(hash);
-    } catch (error) {
+    } catch {
       toast.error('Falha ao calcular hash do arquivo.');
     }
   };
@@ -178,10 +199,10 @@ export const ImportacoesPage = () => {
       data.append('cedenteId', form.cedenteId);
       if (fileHash) data.append('fileHash', fileHash);
 
-      const response = await http.post('/operacoes/importacoes', data, {
+      const response = await http.post<CreateImportacaoResponse>('/operacoes/importacoes', data, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const { importacaoId } = response.data as any;
+      const { importacaoId } = response.data;
       toast.success('Importação enviada para processamento.');
       setFile(null);
       setFileHash('');
@@ -209,7 +230,7 @@ export const ImportacoesPage = () => {
 
   const onEdit = (row: ImportacaoItem) => onDetails(row);
 
-  const onDelete = (_row: ImportacaoItem) => {
+  const onDelete = () => {
     toast('Excluir não suportado para importações.', { icon: 'ℹ️' });
   };
 

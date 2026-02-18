@@ -19,6 +19,10 @@ type FieldDef = {
 
 type CrudRecord = { id: string; [key: string]: string | boolean | number | null | undefined };
 type AutoCreateResult = { id: string; status?: string; message?: string };
+type FormValue = string | boolean;
+type LookupData = Record<string, FormValue>;
+type ExtraListItem = { id: string; [key: string]: string | number | boolean | null | undefined };
+type PagedLikeResponse<T> = { items?: T[]; Items?: T[]; page?: number; Page?: number; totalPages?: number; TotalPages?: number };
 
 const toBool = (value: unknown) => value === true || value === 'true' || value === 1;
 
@@ -55,9 +59,9 @@ export const CadastroCrudPage = ({
   endpoint: string;
   columns: Column<CrudRecord>[];
   fields: FieldDef[];
-  defaultValues: Record<string, string | boolean>;
+  defaultValues: Record<string, FormValue>;
   withExtras?: boolean;
-  onDocumentoLookup?: (doc: string) => Promise<Record<string, any> | null>;
+  onDocumentoLookup?: (doc: string) => Promise<LookupData | null>;
   createMode?: 'default' | 'documentOnly';
   documentModalTitle?: string;
   documentFieldLabel?: string;
@@ -73,11 +77,11 @@ export const CadastroCrudPage = ({
   const [modalOpen, setModalOpen] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
   const [current, setCurrent] = useState<CrudRecord | null>(null);
-  const [form, setForm] = useState<Record<string, string | boolean>>(defaultValues);
+  const [form, setForm] = useState<Record<string, FormValue>>(defaultValues);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [anexos, setAnexos] = useState<any[]>([]);
-  const [obs, setObs] = useState<any[]>([]);
-  const [historico, setHistorico] = useState<any[]>([]);
+  const [anexos, setAnexos] = useState<ExtraListItem[]>([]);
+  const [obs, setObs] = useState<ExtraListItem[]>([]);
+  const [historico, setHistorico] = useState<ExtraListItem[]>([]);
   const [historicoPage, setHistoricoPage] = useState(1);
   const [historicoTotalPages, setHistoricoTotalPages] = useState(1);
   const [uploading, setUploading] = useState(false);
@@ -277,12 +281,14 @@ export const CadastroCrudPage = ({
         http.get(`${endpoint}/${id}/observacoes`),
         http.get(`${endpoint}/${id}/historico`, { params: { page: pageHist, pageSize: 10 } }),
       ]);
-      setAnexos((anx.data as any[]) ?? []);
-      setObs((ob.data as any[]) ?? []);
-      const h = hist.data as any;
-      setHistorico((h.items ?? h.Items ?? []) as any[]);
-      setHistoricoPage(Number(h.page ?? h.Page ?? 1));
-      setHistoricoTotalPages(Number(h.totalPages ?? h.TotalPages ?? 1));
+      const anexosPayload = Array.isArray(anx.data) ? (anx.data as ExtraListItem[]) : [];
+      const obsPayload = Array.isArray(ob.data) ? (ob.data as ExtraListItem[]) : [];
+      const historyPayload = hist.data as PagedLikeResponse<ExtraListItem>;
+      setAnexos(anexosPayload);
+      setObs(obsPayload);
+      setHistorico(historyPayload.items ?? historyPayload.Items ?? []);
+      setHistoricoPage(Number(historyPayload.page ?? historyPayload.Page ?? 1));
+      setHistoricoTotalPages(Number(historyPayload.totalPages ?? historyPayload.TotalPages ?? 1));
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -495,7 +501,7 @@ export const CadastroCrudPage = ({
                   <ul className="extras-list">
                     {anexos.map((a) => (
                       <li key={a.id}>
-                        <span>{a.nomeArquivo ?? a.NomeArquivo}</span>
+                        <span>{String(a.nomeArquivo ?? a.NomeArquivo ?? '')}</span>
                         {!readOnly ? (
                           <button type="button" className="btn-muted" onClick={() => void deleteAnexo(a.id)}>
                             Remover
@@ -523,10 +529,10 @@ export const CadastroCrudPage = ({
                     {obs.map((o) => (
                       <li key={o.id}>
                         <div>
-                          <strong>{o.autorEmail ?? o.AutorEmail ?? '---'}</strong> —{' '}
-                          {new Date(o.createdAt ?? o.CreatedAt).toLocaleString()}
+                          <strong>{String(o.autorEmail ?? o.AutorEmail ?? '---')}</strong> —{' '}
+                          {new Date(String(o.createdAt ?? o.CreatedAt ?? '')).toLocaleString()}
                         </div>
-                        <div>{o.texto ?? o.Texto}</div>
+                        <div>{String(o.texto ?? o.Texto ?? '')}</div>
                         {!readOnly ? (
                           <button type="button" className="btn-muted" onClick={() => void deleteObs(o.id)}>
                             Remover
@@ -541,9 +547,9 @@ export const CadastroCrudPage = ({
                     {historico.map((h) => (
                       <li key={h.id}>
                         <div>
-                          <strong>{h.acao ?? h.Acao}</strong> — {h.entidade ?? h.Entidade} ({h.userEmail ?? h.UserEmail ?? '---'})
+                          <strong>{String(h.acao ?? h.Acao ?? '')}</strong> — {String(h.entidade ?? h.Entidade ?? '')} ({String(h.userEmail ?? h.UserEmail ?? '---')})
                         </div>
-                        <div>{new Date(h.createdAt ?? h.CreatedAt).toLocaleString()} — {h.payloadJson ?? h.PayloadJson}</div>
+                        <div>{new Date(String(h.createdAt ?? h.CreatedAt ?? '')).toLocaleString()} — {String(h.payloadJson ?? h.PayloadJson ?? '')}</div>
                       </li>
                     ))}
                   </ul>

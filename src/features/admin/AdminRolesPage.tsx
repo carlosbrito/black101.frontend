@@ -4,14 +4,15 @@ import { getErrorMessage, http } from '../../shared/api/http';
 import { PageFrame } from '../../shared/ui/PageFrame';
 
 type RoleItem = { id: string; nome: string };
+type ApiRoleItem = { id?: string; Id?: string; nome?: string; Nome?: string };
 
 export const AdminRolesPage = () => {
   const [roles, setRoles] = useState<RoleItem[]>([]);
 
   const list = async () => {
     try {
-      const response = await http.get<RoleItem[]>('/admin/roles');
-      setRoles((response.data as any[]).map((x) => ({ id: String(x.id ?? x.Id), nome: x.nome ?? x.Nome })));
+      const response = await http.get<ApiRoleItem[]>('/admin/roles');
+      setRoles(response.data.map((item) => ({ id: String(item.id ?? item.Id), nome: String(item.nome ?? item.Nome ?? '') })));
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -31,6 +32,7 @@ export const AdminRolesPage = () => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void list();
   }, []);
 

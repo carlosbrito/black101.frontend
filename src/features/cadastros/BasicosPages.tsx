@@ -36,7 +36,7 @@ const makeBasicoPage = (title: string, subtitle: string, endpoint: string, tipo:
       : []),
   ];
 
-  const defaultValues: Record<string, any> = { nome: '', documento: '', ativo: true };
+  const defaultValues: Record<string, string | boolean> = { nome: '', documento: '', ativo: true };
   if (tiposComCodigo.has(tipo)) defaultValues.codigo = '';
   if (tiposPessoa.has(tipo)) {
     defaultValues.email = '';
@@ -50,13 +50,13 @@ const makeBasicoPage = (title: string, subtitle: string, endpoint: string, tipo:
     if (digits.length !== 14) return null;
     try {
       const resp = await http.get('/cadastros/pessoas/receita', { params: { cnpj: digits } });
-      const data = resp.data as Record<string, any>;
+      const data = resp.data as Record<string, unknown>;
       return {
-        nome: data.nome ?? '',
-        cidade: data.cidade ?? '',
-        uf: data.uf ?? '',
-        email: data.email ?? '',
-        telefone: data.telefone ?? '',
+        nome: String(data.nome ?? ''),
+        cidade: String(data.cidade ?? ''),
+        uf: String(data.uf ?? ''),
+        email: String(data.email ?? ''),
+        telefone: String(data.telefone ?? ''),
         documento: digits,
       };
     } catch (error) {
