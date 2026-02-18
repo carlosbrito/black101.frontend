@@ -160,13 +160,17 @@
 
 .entity-table-wrap {
   width: 100%;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
   border: 1px solid var(--line);
   border-radius: 12px;
 }
 
 .entity-table-wrap table {
   width: 100%;
+  min-width: 720px;
   border-collapse: collapse;
 }
 
@@ -240,6 +244,14 @@
 
   .entity-actions button,
   .entity-inline-actions button {
+    width: 100%;
+  }
+
+  .table-actions {
+    flex-wrap: wrap;
+  }
+
+  .table-actions button {
     width: 100%;
   }
 }

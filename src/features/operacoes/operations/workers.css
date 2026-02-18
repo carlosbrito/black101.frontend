@@ -88,3 +88,35 @@
   background: #fffbeb;
   color: #92400e;
 }
+
+@media (max-width: 1100px) {
+  .workers-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .workers-table,
+  .workers-details {
+    padding: 0.8rem;
+  }
+
+  .workers-details__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .workers-details__controls button,
+  .workers-details__scale .scale-row button {
+    width: 100%;
+  }
+
+  .workers-details__scale .scale-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workers-details__scale input {
+    width: 100%;
+  }
+}

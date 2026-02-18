@@ -136,6 +136,7 @@ export const MainLayout = () => {
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const contextRef = useRef<HTMLDivElement | null>(null);
   const closeMenuTimerRef = useRef<number | null>(null);
+  const topbarRef = useRef<HTMLElement | null>(null);
   const location = useLocation();
 
   const menuGroups = useMemo(
@@ -269,9 +270,30 @@ export const MainLayout = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const topbarElement = topbarRef.current;
+    if (!topbarElement) return;
+
+    const setTopbarHeight = () => {
+      const { height } = topbarElement.getBoundingClientRect();
+      root.style.setProperty('--topbar-height', `${Math.ceil(height)}px`);
+    };
+
+    setTopbarHeight();
+    const observer = new ResizeObserver(setTopbarHeight);
+    observer.observe(topbarElement);
+    window.addEventListener('resize', setTopbarHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', setTopbarHeight);
+    };
+  }, []);
+
   return (
     <div className="app-shell">
-      <header className="topbar">
+      <header className="topbar" ref={topbarRef}>
         <div className="brand-wrap">
           <button className="mobile-toggle" onClick={() => setMobileOpen((v) => !v)}>
             Menu

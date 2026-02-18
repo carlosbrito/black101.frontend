@@ -1,7 +1,10 @@
 .table-wrap {
   width: 100%;
   box-sizing: border-box;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
@@ -9,6 +12,7 @@
 
 .table-wrap table {
   width: 100%;
+  min-width: 100%;
   border-collapse: collapse;
 }
 
@@ -47,6 +51,7 @@
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
   justify-content: flex-end;
 }
@@ -85,11 +90,84 @@
   animation: pulse 1.2s linear infinite;
 }
 
+.table-mobile-cards {
+  display: none;
+}
+
+.table-mobile-card {
+  border-bottom: 1px solid var(--line);
+  padding: 0.8rem 0.78rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.table-mobile-card:last-child {
+  border-bottom: 0;
+}
+
+.table-mobile-row {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.table-mobile-row strong {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.table-mobile-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.table-mobile-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.table-mobile-actions button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 0.34rem 0.56rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.table-mobile-actions .danger {
+  color: var(--danger);
+  border-color: #e5c8c4;
+}
+
 @keyframes pulse {
   from {
     background-position: 100% 0;
   }
   to {
     background-position: -100% 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .table-wrap--mobile-cards table {
+    display: none;
+  }
+
+  .table-wrap--mobile-cards .table-mobile-cards {
+    display: block;
+  }
+
+  .table-wrap--mobile-scroll table {
+    min-width: 720px;
+  }
+
+  .table-wrap td,
+  .table-wrap th {
+    padding: 0.62rem;
   }
 }

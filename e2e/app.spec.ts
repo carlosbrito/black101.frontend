@@ -591,6 +591,13 @@ const login = async (
   await expect(page).toHaveURL(/\/login/);
 };
 
+const assertNoPageHorizontalOverflow = async (page: import('@playwright/test').Page) => {
+  const hasOverflow = await page.evaluate(() => {
+    return document.documentElement.scrollWidth - window.innerWidth > 1;
+  });
+  expect(hasOverflow).toBeFalsy();
+};
+
 test.beforeEach(async ({ page }) => {
   await setupApiMock(page);
 });
@@ -625,6 +632,34 @@ test('navegação do mega menu', async ({ page }, testInfo) => {
     await page.goto('/cadastro/administradoras');
   }
   await expect(page).toHaveURL(/\/cadastro\/administradoras/);
+});
+
+test('layout sem overflow horizontal global', async ({ page }) => {
+  await login(page);
+
+  await assertNoPageHorizontalOverflow(page);
+  await page.goto('/cadastro/administradoras');
+  await assertNoPageHorizontalOverflow(page);
+  await page.goto('/operacoes/importacoes');
+  await assertNoPageHorizontalOverflow(page);
+  await page.goto('/operacoes/workers');
+  await assertNoPageHorizontalOverflow(page);
+});
+
+test('datatable usa cards no mobile para listas simples', async ({ page }, testInfo) => {
+  await login(page);
+  await page.goto('/cadastro/bancos');
+
+  const cardsContainer = page.locator('.table-wrap--mobile-cards .table-mobile-cards').first();
+
+  if (testInfo.project.name.includes('mobile')) {
+    await expect(page.locator('.table-wrap--mobile-cards').first()).toBeVisible();
+    const cardsDisplay = await cardsContainer.evaluate((element) => window.getComputedStyle(element).display);
+    expect(cardsDisplay).toBe('block');
+  } else {
+    const cardsDisplay = await cardsContainer.evaluate((element) => window.getComputedStyle(element).display);
+    expect(cardsDisplay).toBe('none');
+  }
 });
 
 const runCrudAgentesFull = async (page: import('@playwright/test').Page, suffix: string) => {

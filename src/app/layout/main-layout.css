@@ -375,7 +375,7 @@
 
 .context-strip {
   position: sticky;
-  top: 74px;
+  top: var(--topbar-height, 74px);
   z-index: 50;
   display: grid;
   grid-template-columns: minmax(240px, 1fr) auto minmax(220px, 1fr);
@@ -672,7 +672,6 @@
   }
 
   .context-strip {
-    top: 130px;
     grid-template-columns: 1fr;
     justify-items: stretch;
     gap: 0.6rem;
@@ -790,7 +789,6 @@
   }
 
   .context-strip {
-    top: 168px;
     padding: 0.52rem 0.8rem;
   }
 
