@@ -57,13 +57,10 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     const created: Record<string, RecordItem | RecordItem[]> = {
       complemento: { id: createId(), cedenteId, autoAprovacao: false, desabilitarAcoesConsultorAposAtivo: false },
       contatos: [],
-      risco: [],
-      'risco-gestora': [],
       representantes: [],
       contas: [],
       documentos: [],
       parametrizacao: [],
-      diligencia: [],
       contratos: [],
       atualizacoes: [],
       despesas: [],

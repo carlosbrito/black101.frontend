@@ -29,13 +29,10 @@ type TabKey =
   | 'cedente'
   | 'complemento'
   | 'contatos'
-  | 'risco'
-  | 'riscoGestora'
   | 'representantes'
   | 'contas'
   | 'documentos'
   | 'parametrizacao'
-  | 'diligencia'
   | 'contratos'
   | 'atualizacoes'
   | 'despesas'
@@ -78,25 +75,6 @@ type ContatoDto = {
   email: string;
   telefone1: string;
   telefone2?: string | null;
-  observacoes?: string | null;
-};
-
-type RiscoDto = {
-  id: string;
-  cedenteId: string;
-  tipoRisco: string;
-  score?: number | null;
-  limite?: number | null;
-  dataReferencia?: string | null;
-  observacoes?: string | null;
-};
-
-type RiscoGestoraDto = {
-  id: string;
-  cedenteId: string;
-  classificacaoInterna: string;
-  probabilidadeInadimplencia?: number | null;
-  perdaEsperada?: number | null;
   observacoes?: string | null;
 };
 
@@ -160,16 +138,6 @@ type ParametrizacaoDto = {
   habilitado: boolean;
 };
 
-type DiligenciaDto = {
-  id: string;
-  cedenteId: string;
-  tipoDiligencia: string;
-  status: string;
-  dataSolicitacao: string;
-  dataConclusao?: string | null;
-  observacoes?: string | null;
-};
-
 type ContratoDto = {
   id: string;
   cedenteId: string;
@@ -227,13 +195,10 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: 'cedente', label: 'Cedente' },
   { key: 'complemento', label: 'Complemento' },
   { key: 'contatos', label: 'Contatos' },
-  { key: 'risco', label: 'Risco' },
-  { key: 'riscoGestora', label: 'Risco Gestora' },
   { key: 'representantes', label: 'Representantes' },
   { key: 'contas', label: 'Contas' },
   { key: 'documentos', label: 'Documentos' },
   { key: 'parametrizacao', label: 'Parametrização' },
-  { key: 'diligencia', label: 'Diligência' },
   { key: 'contratos', label: 'Contratos' },
   { key: 'atualizacoes', label: 'Atualizações' },
   { key: 'despesas', label: 'Despesas' },
@@ -337,13 +302,10 @@ export const CedenteFormPage = () => {
 
   const [complemento, setComplemento] = useState<ComplementoDto>(createInitialComplemento());
   const [contatos, setContatos] = useState<ContatoDto[]>([]);
-  const [riscos, setRiscos] = useState<RiscoDto[]>([]);
-  const [riscosGestora, setRiscosGestora] = useState<RiscoGestoraDto[]>([]);
   const [representantes, setRepresentantes] = useState<CedenteRepresentanteDto[]>([]);
   const [contas, setContas] = useState<ContaDto[]>([]);
   const [documentos, setDocumentos] = useState<DocumentoDto[]>([]);
   const [parametrizacoes, setParametrizacoes] = useState<ParametrizacaoDto[]>([]);
-  const [diligencias, setDiligencias] = useState<DiligenciaDto[]>([]);
   const [contratos, setContratos] = useState<ContratoDto[]>([]);
   const [atualizacoes, setAtualizacoes] = useState<AtualizacaoDto[]>([]);
   const [despesas, setDespesas] = useState<DespesaDto[]>([]);
@@ -374,21 +336,6 @@ export const CedenteFormPage = () => {
     observacoes: '',
   });
 
-  const [riscoForm, setRiscoForm] = useState({
-    tipoRisco: 'Padrao',
-    score: '',
-    limite: '',
-    dataReferencia: '',
-    observacoes: '',
-  });
-
-  const [riscoGestoraForm, setRiscoGestoraForm] = useState({
-    classificacaoInterna: 'Neutro',
-    probabilidadeInadimplencia: '',
-    perdaEsperada: '',
-    observacoes: '',
-  });
-
   const [contaForm, setContaForm] = useState({
     bancoId: '',
     bancoNome: '',
@@ -412,14 +359,6 @@ export const CedenteFormPage = () => {
     tranche: '',
     contaReferencia: '',
     habilitado: true,
-  });
-
-  const [diligenciaForm, setDiligenciaForm] = useState({
-    tipoDiligencia: 'Analise',
-    status: 'Aberto',
-    dataSolicitacao: '',
-    dataConclusao: '',
-    observacoes: '',
   });
 
   const [contratoForm, setContratoForm] = useState({
@@ -517,13 +456,10 @@ export const CedenteFormPage = () => {
     const [
       complementoRes,
       contatosRes,
-      riscosRes,
-      riscosGestoraRes,
       representantesRes,
       contasRes,
       documentosRes,
       parametrizacaoRes,
-      diligenciaRes,
       contratosRes,
       atualizacoesRes,
       despesasRes,
@@ -535,13 +471,10 @@ export const CedenteFormPage = () => {
     ] = await Promise.all([
       http.get(`/cadastros/cedentes/${id}/complemento`),
       http.get(`/cadastros/cedentes/${id}/contatos`),
-      http.get(`/cadastros/cedentes/${id}/risco`),
-      http.get(`/cadastros/cedentes/${id}/risco-gestora`),
       http.get(`/cadastros/cedentes/${id}/representantes`),
       http.get(`/cadastros/cedentes/${id}/contas`),
       http.get(`/cadastros/cedentes/${id}/documentos`),
       http.get(`/cadastros/cedentes/${id}/parametrizacao`),
-      http.get(`/cadastros/cedentes/${id}/diligencia`),
       http.get(`/cadastros/cedentes/${id}/contratos`),
       http.get(`/cadastros/cedentes/${id}/atualizacoes`),
       http.get(`/cadastros/cedentes/${id}/despesas`),
@@ -554,13 +487,10 @@ export const CedenteFormPage = () => {
 
     setComplemento((complementoRes.data as ComplementoDto) ?? createInitialComplemento());
     setContatos((contatosRes.data as ContatoDto[]) ?? []);
-    setRiscos((riscosRes.data as RiscoDto[]) ?? []);
-    setRiscosGestora((riscosGestoraRes.data as RiscoGestoraDto[]) ?? []);
     setRepresentantes((representantesRes.data as CedenteRepresentanteDto[]) ?? []);
     setContas((contasRes.data as ContaDto[]) ?? []);
     setDocumentos((documentosRes.data as DocumentoDto[]) ?? []);
     setParametrizacoes((parametrizacaoRes.data as ParametrizacaoDto[]) ?? []);
-    setDiligencias((diligenciaRes.data as DiligenciaDto[]) ?? []);
     setContratos((contratosRes.data as ContratoDto[]) ?? []);
     setAtualizacoes((atualizacoesRes.data as AtualizacaoDto[]) ?? []);
     setDespesas((despesasRes.data as DespesaDto[]) ?? []);
@@ -1029,124 +959,6 @@ export const CedenteFormPage = () => {
     });
   };
 
-  const addRisco = async () => {
-    if (!riscoForm.tipoRisco.trim()) {
-      toast.error('Informe o tipo de risco.');
-      return;
-    }
-
-    await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/risco`, {
-        tipoRisco: riscoForm.tipoRisco.trim(),
-        score: parseNumber(riscoForm.score),
-        limite: parseNumber(riscoForm.limite),
-        dataReferencia: riscoForm.dataReferencia || null,
-        observacoes: riscoForm.observacoes.trim() || null,
-      });
-
-      setRiscoForm({
-        tipoRisco: 'Padrao',
-        score: '',
-        limite: '',
-        dataReferencia: '',
-        observacoes: '',
-      });
-
-      toast.success('Risco adicionado.');
-    });
-  };
-
-  const updateRisco = async (item: RiscoDto) => {
-    const tipoRisco = window.prompt('Tipo de risco', item.tipoRisco);
-    if (tipoRisco === null) return;
-    const score = window.prompt('Score', item.score?.toString() ?? '');
-    if (score === null) return;
-    const limite = window.prompt('Limite', item.limite?.toString() ?? '');
-    if (limite === null) return;
-    const observacoesItem = window.prompt('Observações', item.observacoes ?? '');
-    if (observacoesItem === null) return;
-
-    await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/risco/${item.id}`, {
-        tipoRisco: tipoRisco.trim(),
-        score: parseNumber(score),
-        limite: parseNumber(limite),
-        dataReferencia: item.dataReferencia ?? null,
-        observacoes: observacoesItem.trim() || null,
-      });
-      toast.success('Risco atualizado.');
-    });
-  };
-
-  const removeRisco = async (item: RiscoDto) => {
-    if (!window.confirm('Excluir risco?')) {
-      return;
-    }
-
-    await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/risco/${item.id}`);
-      toast.success('Risco removido.');
-    });
-  };
-
-  const addRiscoGestora = async () => {
-    if (!riscoGestoraForm.classificacaoInterna.trim()) {
-      toast.error('Informe a classificação interna.');
-      return;
-    }
-
-    await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/risco-gestora`, {
-        classificacaoInterna: riscoGestoraForm.classificacaoInterna.trim(),
-        probabilidadeInadimplencia: parseNumber(riscoGestoraForm.probabilidadeInadimplencia),
-        perdaEsperada: parseNumber(riscoGestoraForm.perdaEsperada),
-        observacoes: riscoGestoraForm.observacoes.trim() || null,
-      });
-
-      setRiscoGestoraForm({
-        classificacaoInterna: 'Neutro',
-        probabilidadeInadimplencia: '',
-        perdaEsperada: '',
-        observacoes: '',
-      });
-
-      toast.success('Risco gestora adicionado.');
-    });
-  };
-
-  const updateRiscoGestora = async (item: RiscoGestoraDto) => {
-    const classificacaoInterna = window.prompt('Classificação interna', item.classificacaoInterna);
-    if (classificacaoInterna === null) return;
-    const probabilidadeInadimplencia = window.prompt('Probabilidade de inadimplência', item.probabilidadeInadimplencia?.toString() ?? '');
-    if (probabilidadeInadimplencia === null) return;
-    const perdaEsperada = window.prompt('Perda esperada', item.perdaEsperada?.toString() ?? '');
-    if (perdaEsperada === null) return;
-    const observacoesItem = window.prompt('Observações', item.observacoes ?? '');
-    if (observacoesItem === null) return;
-
-    await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/risco-gestora/${item.id}`, {
-        classificacaoInterna: classificacaoInterna.trim(),
-        probabilidadeInadimplencia: parseNumber(probabilidadeInadimplencia),
-        perdaEsperada: parseNumber(perdaEsperada),
-        observacoes: observacoesItem.trim() || null,
-      });
-
-      toast.success('Risco gestora atualizado.');
-    });
-  };
-
-  const removeRiscoGestora = async (item: RiscoGestoraDto) => {
-    if (!window.confirm('Excluir risco gestora?')) {
-      return;
-    }
-
-    await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/risco-gestora/${item.id}`);
-      toast.success('Risco gestora removido.');
-    });
-  };
-
   const addRepresentante = async () => {
     if (!selectedRepresentanteId) {
       toast.error('Selecione um representante.');
@@ -1386,65 +1198,6 @@ export const CedenteFormPage = () => {
     await withCedenteReload(async () => {
       await http.delete(`/cadastros/cedentes/${cedenteId}/parametrizacao/${item.id}`);
       toast.success('Parametrização removida.');
-    });
-  };
-
-  const addDiligencia = async () => {
-    if (!diligenciaForm.tipoDiligencia.trim() || !diligenciaForm.status.trim()) {
-      toast.error('Preencha tipo e status da diligência.');
-      return;
-    }
-
-    await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/diligencia`, {
-        tipoDiligencia: diligenciaForm.tipoDiligencia.trim(),
-        status: diligenciaForm.status.trim(),
-        dataSolicitacao: diligenciaForm.dataSolicitacao || new Date().toISOString(),
-        dataConclusao: diligenciaForm.dataConclusao || null,
-        observacoes: diligenciaForm.observacoes.trim() || null,
-      });
-
-      setDiligenciaForm({
-        tipoDiligencia: 'Analise',
-        status: 'Aberto',
-        dataSolicitacao: '',
-        dataConclusao: '',
-        observacoes: '',
-      });
-
-      toast.success('Diligência adicionada.');
-    });
-  };
-
-  const updateDiligencia = async (item: DiligenciaDto) => {
-    const tipoDiligencia = window.prompt('Tipo da diligência', item.tipoDiligencia);
-    if (tipoDiligencia === null) return;
-    const status = window.prompt('Status da diligência', item.status);
-    if (status === null) return;
-    const observacoesItem = window.prompt('Observações', item.observacoes ?? '');
-    if (observacoesItem === null) return;
-
-    await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/diligencia/${item.id}`, {
-        tipoDiligencia: tipoDiligencia.trim(),
-        status: status.trim(),
-        dataSolicitacao: item.dataSolicitacao,
-        dataConclusao: item.dataConclusao,
-        observacoes: observacoesItem.trim() || null,
-      });
-
-      toast.success('Diligência atualizada.');
-    });
-  };
-
-  const removeDiligencia = async (item: DiligenciaDto) => {
-    if (!window.confirm('Excluir diligência?')) {
-      return;
-    }
-
-    await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/diligencia/${item.id}`);
-      toast.success('Diligência removida.');
     });
   };
 
@@ -2190,128 +1943,6 @@ export const CedenteFormPage = () => {
     </section>
   );
 
-  const renderRiscoTab = () => (
-    <section className="entity-form-stack">
-      <section className="entity-card">
-        <header><h3>Novo risco</h3></header>
-        <div className="entity-grid cols-3">
-          <label>
-            <span>Tipo de risco</span>
-            <input value={riscoForm.tipoRisco} onChange={(event) => setRiscoForm((current) => ({ ...current, tipoRisco: event.target.value }))} />
-          </label>
-          <label>
-            <span>Score</span>
-            <input value={riscoForm.score} onChange={(event) => setRiscoForm((current) => ({ ...current, score: event.target.value }))} />
-          </label>
-          <label>
-            <span>Limite</span>
-            <input value={riscoForm.limite} onChange={(event) => setRiscoForm((current) => ({ ...current, limite: event.target.value }))} />
-          </label>
-          <label>
-            <span>Data referência</span>
-            <input type="date" value={riscoForm.dataReferencia} onChange={(event) => setRiscoForm((current) => ({ ...current, dataReferencia: event.target.value }))} />
-          </label>
-          <label className="span-all">
-            <span>Observações</span>
-            <textarea rows={3} value={riscoForm.observacoes} onChange={(event) => setRiscoForm((current) => ({ ...current, observacoes: event.target.value }))} />
-          </label>
-          <div className="entity-inline-actions">
-            <button className="btn-main" onClick={() => void addRisco()}>Adicionar risco</button>
-          </div>
-        </div>
-      </section>
-      <section className="entity-card">
-        <div className="entity-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Score</th>
-                <th>Limite</th>
-                <th>Data</th>
-                <th className="col-actions">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {riscos.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.tipoRisco}</td>
-                  <td>{item.score ?? '-'}</td>
-                  <td>{item.limite ?? '-'}</td>
-                  <td>{item.dataReferencia ? formatDateTime(item.dataReferencia) : '-'}</td>
-                  <td className="col-actions">
-                    <div className="table-actions">
-                      <button onClick={() => void updateRisco(item)}>Editar</button>
-                      <button className="danger" onClick={() => void removeRisco(item)}>Excluir</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </section>
-  );
-
-  const renderRiscoGestoraTab = () => (
-    <section className="entity-form-stack">
-      <section className="entity-card">
-        <header><h3>Novo risco gestora</h3></header>
-        <div className="entity-grid cols-3">
-          <label>
-            <span>Classificação interna</span>
-            <input value={riscoGestoraForm.classificacaoInterna} onChange={(event) => setRiscoGestoraForm((current) => ({ ...current, classificacaoInterna: event.target.value }))} />
-          </label>
-          <label>
-            <span>Prob. inadimplência</span>
-            <input value={riscoGestoraForm.probabilidadeInadimplencia} onChange={(event) => setRiscoGestoraForm((current) => ({ ...current, probabilidadeInadimplencia: event.target.value }))} />
-          </label>
-          <label>
-            <span>Perda esperada</span>
-            <input value={riscoGestoraForm.perdaEsperada} onChange={(event) => setRiscoGestoraForm((current) => ({ ...current, perdaEsperada: event.target.value }))} />
-          </label>
-          <label className="span-all">
-            <span>Observações</span>
-            <textarea rows={3} value={riscoGestoraForm.observacoes} onChange={(event) => setRiscoGestoraForm((current) => ({ ...current, observacoes: event.target.value }))} />
-          </label>
-          <div className="entity-inline-actions">
-            <button className="btn-main" onClick={() => void addRiscoGestora()}>Adicionar risco gestora</button>
-          </div>
-        </div>
-      </section>
-      <section className="entity-card">
-        <div className="entity-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Classificação</th>
-                <th>Probabilidade</th>
-                <th>Perda</th>
-                <th className="col-actions">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {riscosGestora.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.classificacaoInterna}</td>
-                  <td>{item.probabilidadeInadimplencia ?? '-'}</td>
-                  <td>{item.perdaEsperada ?? '-'}</td>
-                  <td className="col-actions">
-                    <div className="table-actions">
-                      <button onClick={() => void updateRiscoGestora(item)}>Editar</button>
-                      <button className="danger" onClick={() => void removeRiscoGestora(item)}>Excluir</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </section>
-  );
-
   const renderRepresentantesTab = () => (
     <section className="entity-form-stack">
       <section className="entity-card">
@@ -2582,31 +2213,6 @@ export const CedenteFormPage = () => {
     </section>
   );
 
-  const renderDiligenciaTab = () => (
-    <section className="entity-form-stack">
-      <section className="entity-card">
-        <header><h3>Nova diligência</h3></header>
-        <div className="entity-grid cols-3">
-          <label><span>Tipo</span><input value={diligenciaForm.tipoDiligencia} onChange={(event) => setDiligenciaForm((c) => ({ ...c, tipoDiligencia: event.target.value }))} /></label>
-          <label><span>Status</span><input value={diligenciaForm.status} onChange={(event) => setDiligenciaForm((c) => ({ ...c, status: event.target.value }))} /></label>
-          <label><span>Data solicitação</span><input type="datetime-local" value={diligenciaForm.dataSolicitacao} onChange={(event) => setDiligenciaForm((c) => ({ ...c, dataSolicitacao: event.target.value }))} /></label>
-          <label><span>Data conclusão</span><input type="datetime-local" value={diligenciaForm.dataConclusao} onChange={(event) => setDiligenciaForm((c) => ({ ...c, dataConclusao: event.target.value }))} /></label>
-          <label className="span-all"><span>Observações</span><textarea rows={3} value={diligenciaForm.observacoes} onChange={(event) => setDiligenciaForm((c) => ({ ...c, observacoes: event.target.value }))} /></label>
-          <div className="entity-inline-actions"><button className="btn-main" onClick={() => void addDiligencia()}>Adicionar</button></div>
-        </div>
-      </section>
-      <section className="entity-card">
-        {renderSimpleCrudRows(
-          diligencias,
-          ['Tipo', 'Status', 'Solicitação', 'Conclusão'],
-          (item) => [<td key="t">{item.tipoDiligencia}</td>, <td key="s">{item.status}</td>, <td key="ds">{formatDateTime(item.dataSolicitacao)}</td>, <td key="dc">{item.dataConclusao ? formatDateTime(item.dataConclusao) : '-'}</td>],
-          (item) => void removeDiligencia(item),
-          (item) => void updateDiligencia(item),
-        )}
-      </section>
-    </section>
-  );
-
   const renderContratosTab = () => (
     <section className="entity-form-stack">
       <section className="entity-card">
@@ -2825,10 +2431,6 @@ export const CedenteFormPage = () => {
         return renderComplementoTab();
       case 'contatos':
         return renderContatosTab();
-      case 'risco':
-        return renderRiscoTab();
-      case 'riscoGestora':
-        return renderRiscoGestoraTab();
       case 'representantes':
         return renderRepresentantesTab();
       case 'contas':
@@ -2837,8 +2439,6 @@ export const CedenteFormPage = () => {
         return renderDocumentosTab();
       case 'parametrizacao':
         return renderParametrizacaoTab();
-      case 'diligencia':
-        return renderDiligenciaTab();
       case 'contratos':
         return renderContratosTab();
       case 'atualizacoes':
