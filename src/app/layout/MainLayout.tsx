@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { legacyMenu } from './menuConfig';
+import { useAuth } from '../auth/AuthContext';
 import './main-layout.css';
 
 type IconName =
@@ -125,6 +126,7 @@ const contextShortcuts: ShortcutItem[] = [
 ];
 
 export const MainLayout = () => {
+  const { isSecuritizadora } = useAuth();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [fundPickerOpen, setFundPickerOpen] = useState(false);
@@ -136,10 +138,15 @@ export const MainLayout = () => {
   const closeMenuTimerRef = useRef<number | null>(null);
   const location = useLocation();
 
+  const menuGroups = useMemo(
+    () => legacyMenu.filter((group) => group.label !== 'Securitizadora' || isSecuritizadora),
+    [isSecuritizadora],
+  );
+
   const breadcrumbIndex = useMemo(() => {
     const index = new Map<string, string[]>();
 
-    legacyMenu.forEach((group) => {
+    menuGroups.forEach((group) => {
       group.childrens.forEach((child) => {
         index.set(child.route, [group.label, child.label]);
       });
@@ -152,7 +159,7 @@ export const MainLayout = () => {
     });
 
     return index;
-  }, []);
+  }, [menuGroups]);
 
   const breadcrumbs = useMemo(() => {
     const currentPath = location.pathname;
@@ -277,12 +284,12 @@ export const MainLayout = () => {
         </div>
 
         <nav className={`mega-nav ${mobileOpen ? 'open' : ''}`} ref={navRef}>
-          {legacyMenu.map((group, groupIndex) => {
+          {menuGroups.map((group, groupIndex) => {
             const totalLinks =
               group.childrens.length +
               (group.complementaryItems?.reduce((acc, item) => acc + item.childrens.length, 0) ?? 0);
             const isWideGroup = totalLinks >= 16;
-            const isRightAlignedGroup = groupIndex >= legacyMenu.length - 2;
+            const isRightAlignedGroup = groupIndex >= menuGroups.length - 2;
             const isCompactGroup = totalLinks <= 8;
             const primarySections = isWideGroup ? chunkItems(group.childrens, 6) : [group.childrens];
             const denseColumnCount = primarySections.length + (group.complementaryItems?.length ?? 0);

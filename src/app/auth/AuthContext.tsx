@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ensureCsrfToken, getErrorMessage, http } from '../../shared/api/http';
-import type { AuthMeResponse, AuthUser } from '../../shared/types/auth';
+import { SegmentoEmpresa, type AuthMeResponse, type AuthUser } from '../../shared/types/auth';
 
 type AuthContextValue = {
   isAuthenticated: boolean;
@@ -8,6 +8,8 @@ type AuthContextValue = {
   user: AuthUser | null;
   roles: string[];
   claims: string[];
+  segmentoEmpresa: SegmentoEmpresa;
+  isSecuritizadora: boolean;
   login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
@@ -20,11 +22,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [claims, setClaims] = useState<string[]>([]);
+  const [segmentoEmpresa, setSegmentoEmpresa] = useState<SegmentoEmpresa>(SegmentoEmpresa.Fidc);
 
   const resetAuth = useCallback(() => {
     setUser(null);
     setRoles([]);
     setClaims([]);
+    setSegmentoEmpresa(SegmentoEmpresa.Fidc);
   }, []);
 
   const refreshMe = useCallback(async () => {
@@ -33,6 +37,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(response.data.user);
       setRoles(response.data.roles);
       setClaims(response.data.claims);
+      setSegmentoEmpresa(response.data.segmentoEmpresa ?? SegmentoEmpresa.Fidc);
     } catch {
       resetAuth();
     }
@@ -72,10 +77,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     user,
     roles,
     claims,
+    segmentoEmpresa,
+    isSecuritizadora: segmentoEmpresa === SegmentoEmpresa.Securitizadora,
     login,
     logout,
     refreshMe,
-  }), [claims, loading, login, logout, refreshMe, roles, user]);
+  }), [claims, loading, login, logout, refreshMe, roles, segmentoEmpresa, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

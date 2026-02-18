@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '../auth/ProtectedRoute';
+import { SecuritizadoraRoute } from '../auth/SecuritizadoraRoute';
 import { MainLayout } from '../layout/MainLayout';
 import { LoginPage } from '../../features/login/LoginPage';
 import { HomePage } from '../../features/shared/HomePage';
@@ -57,6 +58,16 @@ import {
 import { AdminUsuariosPage } from '../../features/admin/AdminUsuariosPage';
 import { AdminRolesPage } from '../../features/admin/AdminRolesPage';
 import { AdminAuditoriaPage } from '../../features/admin/AdminAuditoriaPage';
+import { DebentureEmissoesPage } from '../../features/securitizadora/debentures/DebentureEmissoesPage';
+import { DebentureEmissaoFormPage } from '../../features/securitizadora/debentures/DebentureEmissaoFormPage';
+import { DebentureVendasPage } from '../../features/securitizadora/debentures/DebentureVendasPage';
+import { DebentureVendaFormPage } from '../../features/securitizadora/debentures/DebentureVendaFormPage';
+import { DebentureResgatesPage } from '../../features/securitizadora/debentures/DebentureResgatesPage';
+import { DebentureResgateFormPage } from '../../features/securitizadora/debentures/DebentureResgateFormPage';
+import { DebentureRendimentosPage } from '../../features/securitizadora/debentures/DebentureRendimentosPage';
+import { DebentureRelatorioPage } from '../../features/securitizadora/debentures/DebentureRelatorioPage';
+import { DebentureContabilidadePage } from '../../features/securitizadora/debentures/DebentureContabilidadePage';
+import { DebentureDespesasDetalhadasPage } from '../../features/securitizadora/debentures/DebentureDespesasDetalhadasPage';
 
 export const AppRouter = () => {
   return (
@@ -138,6 +149,21 @@ export const AppRouter = () => {
           <Route path="/admin/usuarios" element={<AdminUsuariosPage />} />
           <Route path="/admin/roles" element={<AdminRolesPage />} />
           <Route path="/admin/auditoria" element={<AdminAuditoriaPage />} />
+          <Route element={<SecuritizadoraRoute />}>
+            <Route path="/securitizadora/debentures/emissoes" element={<DebentureEmissoesPage />} />
+            <Route path="/securitizadora/debentures/emissoes/novo" element={<DebentureEmissaoFormPage />} />
+            <Route path="/securitizadora/debentures/emissoes/:id" element={<DebentureEmissaoFormPage />} />
+            <Route path="/securitizadora/debentures/vendas" element={<DebentureVendasPage />} />
+            <Route path="/securitizadora/debentures/vendas/novo" element={<DebentureVendaFormPage />} />
+            <Route path="/securitizadora/debentures/vendas/:id" element={<DebentureVendaFormPage />} />
+            <Route path="/securitizadora/debentures/resgates" element={<DebentureResgatesPage />} />
+            <Route path="/securitizadora/debentures/resgates/novo" element={<DebentureResgateFormPage />} />
+            <Route path="/securitizadora/debentures/resgates/:id" element={<DebentureResgateFormPage />} />
+            <Route path="/securitizadora/debentures/rendimentos" element={<DebentureRendimentosPage />} />
+            <Route path="/securitizadora/debentures/relatorios/:tipo" element={<DebentureRelatorioPage />} />
+            <Route path="/securitizadora/contabilidade/despesas-detalhadas" element={<DebentureDespesasDetalhadasPage />} />
+            <Route path="/securitizadora/contabilidade/importacao/:sistema" element={<DebentureContabilidadePage />} />
+          </Route>
           <Route path="/construcao/*" element={<EmConstrucaoPage />} />
         </Route>
       </Route>

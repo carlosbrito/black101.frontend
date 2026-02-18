@@ -108,5 +108,34 @@ export const legacyMenu: MenuGroup[] = [
       { label: 'Fechar Data Mov. Financeiro', route: c('financial/close-movement-date') },
     ],
   },
-  // demais grupos preservados
+  {
+    label: 'Securitizadora',
+    childrens: [
+      { label: 'Emissão Debêntures', route: '/securitizadora/debentures/emissoes' },
+      { label: 'Venda de Debêntures', route: '/securitizadora/debentures/vendas' },
+      { label: 'Resgate de Debêntures', route: '/securitizadora/debentures/resgates' },
+      { label: 'Atualização de Rendimentos', route: '/securitizadora/debentures/rendimentos' },
+    ],
+    complementaryItems: [
+      {
+        label: 'Relatórios',
+        childrens: [
+          { label: 'Relatório de Rendimentos', route: '/securitizadora/debentures/relatorios/rendimentos' },
+          { label: 'Relatório Extrato de Vendas', route: '/securitizadora/debentures/relatorios/extrato-vendas' },
+          { label: 'Relatório de Resgate', route: '/securitizadora/debentures/relatorios/resgates' },
+        ],
+      },
+      {
+        label: 'Contabilidade',
+        childrens: [
+          { label: 'Operações Despesas Detalhadas', route: '/securitizadora/contabilidade/despesas-detalhadas' },
+          { label: 'Importação Folhamatic', route: '/securitizadora/contabilidade/importacao/folhamatic' },
+          { label: 'Importação Dominio', route: '/securitizadora/contabilidade/importacao/dominio' },
+          { label: 'Importação Alterdata', route: '/securitizadora/contabilidade/importacao/alterdata' },
+          { label: 'Importação Phoenix', route: '/securitizadora/contabilidade/importacao/phoenix' },
+          { label: 'Importação Prosis', route: '/securitizadora/contabilidade/importacao/prosis' },
+        ],
+      },
+    ],
+  },
 ];

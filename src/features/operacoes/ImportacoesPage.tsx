@@ -27,6 +27,13 @@ type ImportacaoDetails = ImportacaoItem & {
 const origens = ['Cnab', 'Xml', 'Zip', 'Excel'];
 const tiposCnab = ['Cnab2xx', 'Cnab4xx', 'Cnab5xx'];
 
+const inferTipoArquivo = (fileName: string) => {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (ext === 'xml') return 'XML';
+  if (ext === 'zip') return 'ZIP';
+  return 'CNAB';
+};
+
 const isProcessing = (status?: string) =>
   status === 'PROCESSANDO' || status === 'VALIDADO' || status === 'PENDENTE';
 
@@ -136,6 +143,7 @@ export const ImportacoesPage = () => {
       data.append('arquivo', file);
       data.append('fidcId', form.fidcId);
       data.append('origem', form.origem);
+      data.append('tipoArquivo', inferTipoArquivo(file.name));
       if (form.tipoBanco) data.append('tipoBanco', form.tipoBanco);
       if (form.tipoCnab) data.append('tipoCnab', form.tipoCnab);
       if (form.modalidade) data.append('modalidade', form.modalidade);
@@ -198,7 +206,7 @@ export const ImportacoesPage = () => {
   return (
     <PageFrame
       title="Importação de Operações"
-      subtitle="Envie arquivos (CNAB, XML/ZIP, Excel) para processar operações de forma assíncrona."
+      subtitle="Envie arquivos (CNAB, XML ou ZIP) para processar operações de forma assíncrona."
     >
       <div className="import-grid">
         <section className="card upload-card">
@@ -270,18 +278,18 @@ export const ImportacoesPage = () => {
 
             <label className="file-input">
               Arquivo*
-              <input
-                type="file"
-                accept=".rem,.txt,.xml,.zip,.xlsx,.xls"
-                onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
-              />
+                <input
+                  type="file"
+                  accept=".rem,.txt,.cnab,.xml,.zip"
+                  onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
+                />
               {file ? (
                 <small>
                   {file.name} — {(file.size / 1024).toFixed(1)} KB
                   {fileHash ? ` — SHA256 ${fileHash.substring(0, 16)}…` : ' — calculando hash...'}
                 </small>
               ) : (
-                <small>Formatos: CNAB (.rem/.txt), XML/ZIP, Excel (.xlsx/.xls) — até 20MB</small>
+                <small>Formatos: CNAB (.rem/.txt/.cnab), XML/ZIP — até 20MB</small>
               )}
             </label>
 

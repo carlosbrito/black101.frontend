@@ -47,6 +47,8 @@ const statusLabel = (status?: number) => {
       return 'Parando';
     case 5:
       return 'Falhou';
+    case 6:
+      return 'Pausado';
     default:
       return 'Criado';
   }
@@ -135,7 +137,7 @@ export const WorkersPage = () => {
     fetchAudits(row.slug);
   };
 
-  const mutate = async (slug: string, action: 'start' | 'stop' | 'restart' | 'scale', consumers?: number) => {
+  const mutate = async (slug: string, action: 'start' | 'stop' | 'pause' | 'resume' | 'restart' | 'scale', consumers?: number) => {
     setActionLoading(true);
     try {
       const body = consumers ? { consumers } : undefined;
@@ -146,7 +148,12 @@ export const WorkersPage = () => {
         setSelected(updated);
         fetchAudits(slug);
       }
-      toast.success(`Worker ${action === 'stop' ? 'parado' : 'atualizado'} com sucesso.`);
+      const message =
+        action === 'stop' ? 'Worker parado com sucesso.' :
+          action === 'pause' ? 'Worker pausado com sucesso.' :
+            action === 'resume' ? 'Worker retomado com sucesso.' :
+              'Worker atualizado com sucesso.';
+      toast.success(message);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -157,7 +164,7 @@ export const WorkersPage = () => {
   return (
     <PageFrame
       title="Workers"
-      subtitle="Controle de start/stop e escala de consumidores de cada worker."
+      subtitle="Controle de start/pause/resume/stop e escala de consumidores de cada worker."
       actions={
         <button className="btn ghost" onClick={fetchWorkers} disabled={loading}>
           Atualizar
@@ -194,8 +201,14 @@ export const WorkersPage = () => {
                 <button className="btn primary" disabled={actionLoading} onClick={() => mutate(selected.slug, 'start')}>
                   Iniciar
                 </button>
+                <button className="btn ghost" disabled={actionLoading} onClick={() => mutate(selected.slug, 'pause')}>
+                  Pausar
+                </button>
                 <button className="btn" disabled={actionLoading} onClick={() => mutate(selected.slug, 'stop')}>
                   Parar
+                </button>
+                <button className="btn" disabled={actionLoading} onClick={() => mutate(selected.slug, 'resume')}>
+                  Retomar
                 </button>
                 <button className="btn ghost" disabled={actionLoading} onClick={() => mutate(selected.slug, 'restart')}>
                   Reiniciar

@@ -9,33 +9,23 @@ import { applyCpfCnpjMask, applyPhoneMask, formatCpfCnpj, formatDateTime, isVali
 import '../cadastro.css';
 import '../administradoras/entity-form.css';
 
-type TabKey = 'sacado' | 'complemento' | 'contatos' | 'risco' | 'representantes' | 'diligencia' | 'anexos' | 'observacoes' | 'historico';
+type TabKey = 'sacado' | 'complemento' | 'contatos' | 'representantes' | 'anexos' | 'observacoes' | 'historico';
 
 type SacadoDto = { id: string; nome: string; documento: string; email?: string | null; telefone?: string | null; cidade?: string | null; uf?: string | null; ativo: boolean; };
 type SacadoComplementoDto = { sacadoId: string; nomeFantasia?: string | null; classificacao?: string | null; grupoEconomico?: string | null; limiteTotal?: number | null; observacoes?: string | null; };
 type SacadoContatoDto = { id: string; tipoContato: string; nome: string; email: string; telefone1: string; telefone2?: string | null; };
-type SacadoRiscoDto = { id: string; tipoRisco: string; score?: number | null; limite?: number | null; dataReferencia?: string | null; observacoes?: string | null; };
 type SacadoRepresentanteDto = { id: string; representanteId: string; nomeRepresentante: string; documentoRepresentante: string; funcao?: string | null; ativo: boolean; };
 type RepresentanteOption = { id: string; nome: string; cnpjCpf: string; ativo: boolean; };
-type SacadoDiligenciaDto = { id: string; tipoDiligencia: string; status: string; dataSolicitacao: string; dataConclusao?: string | null; observacoes?: string | null; };
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: 'sacado', label: 'Sacado' },
   { key: 'complemento', label: 'Complemento' },
   { key: 'contatos', label: 'Contatos' },
-  { key: 'risco', label: 'Risco' },
   { key: 'representantes', label: 'Representantes' },
-  { key: 'diligencia', label: 'Diligência' },
   { key: 'anexos', label: 'Anexos' },
   { key: 'observacoes', label: 'Observações' },
   { key: 'historico', label: 'Histórico' },
 ];
-
-const toDateInput = (value?: string | null) => {
-  if (!value) return '';
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
-};
 
 const parseNumber = (value: string): number | null => {
   const n = Number(value.replace(',', '.').trim());
@@ -54,13 +44,9 @@ export const SacadoFormPage = () => {
   const [complemento, setComplemento] = useState<SacadoComplementoDto>({ sacadoId: '', nomeFantasia: '', classificacao: '', grupoEconomico: '', limiteTotal: null, observacoes: '' });
   const [contatos, setContatos] = useState<SacadoContatoDto[]>([]);
   const [contatoForm, setContatoForm] = useState({ id: '', tipoContato: '', nome: '', email: '', telefone1: '', telefone2: '' });
-  const [riscos, setRiscos] = useState<SacadoRiscoDto[]>([]);
-  const [riscoForm, setRiscoForm] = useState({ id: '', tipoRisco: '', score: '', limite: '', dataReferencia: '', observacoes: '' });
   const [representantes, setRepresentantes] = useState<SacadoRepresentanteDto[]>([]);
   const [representanteOptions, setRepresentanteOptions] = useState<RepresentanteOption[]>([]);
   const [representanteForm, setRepresentanteForm] = useState({ id: '', representanteId: '', funcao: '', ativo: true });
-  const [diligencias, setDiligencias] = useState<SacadoDiligenciaDto[]>([]);
-  const [diligenciaForm, setDiligenciaForm] = useState({ id: '', tipoDiligencia: '', status: '', dataSolicitacao: '', dataConclusao: '', observacoes: '' });
   const [anexos, setAnexos] = useState<CadastroArquivoDto[]>([]);
   const [anexoFile, setAnexoFile] = useState<File | null>(null);
   const [observacoes, setObservacoes] = useState<CadastroObservacaoDto[]>([]);
@@ -80,12 +66,10 @@ export const SacadoFormPage = () => {
   };
 
   const loadSubTabs = async (id: string) => {
-    const [c1, c2, c3, c4, c5, c6, c7, c8] = await Promise.all([
+    const [c1, c2, c3, c4, c5, c6] = await Promise.all([
       http.get(`/cadastros/sacados/${id}/complemento`),
       http.get(`/cadastros/sacados/${id}/contatos`),
-      http.get(`/cadastros/sacados/${id}/risco`),
       http.get(`/cadastros/sacados/${id}/representantes`),
-      http.get(`/cadastros/sacados/${id}/diligencia`),
       http.get(`/cadastros/sacados/${id}/anexos`),
       http.get(`/cadastros/sacados/${id}/observacoes`),
       http.get(`/cadastros/sacados/${id}/historico`, { params: { page: 1, pageSize: 20 } }),
@@ -94,12 +78,10 @@ export const SacadoFormPage = () => {
     const comp = c1.data as SacadoComplementoDto;
     setComplemento({ sacadoId: id, nomeFantasia: comp.nomeFantasia ?? '', classificacao: comp.classificacao ?? '', grupoEconomico: comp.grupoEconomico ?? '', limiteTotal: comp.limiteTotal ?? null, observacoes: comp.observacoes ?? '' });
     setContatos((c2.data as SacadoContatoDto[]) ?? []);
-    setRiscos((c3.data as SacadoRiscoDto[]) ?? []);
-    setRepresentantes((c4.data as SacadoRepresentanteDto[]) ?? []);
-    setDiligencias((c5.data as SacadoDiligenciaDto[]) ?? []);
-    setAnexos((c6.data as CadastroArquivoDto[]) ?? []);
-    setObservacoes((c7.data as CadastroObservacaoDto[]) ?? []);
-    setHistorico(readPagedResponse<HistoricoItemDto>(c8.data));
+    setRepresentantes((c3.data as SacadoRepresentanteDto[]) ?? []);
+    setAnexos((c4.data as CadastroArquivoDto[]) ?? []);
+    setObservacoes((c5.data as CadastroObservacaoDto[]) ?? []);
+    setHistorico(readPagedResponse<HistoricoItemDto>(c6.data));
   };
 
   useEffect(() => { void loadRepresentanteOptions(); }, []);
@@ -185,18 +167,6 @@ export const SacadoFormPage = () => {
     } catch (e) { toast.error(getErrorMessage(e)); }
   };
 
-  const saveRisco = async () => {
-    if (!sacadoId) return;
-    if (!riscoForm.tipoRisco.trim()) return void toast.error('Informe o tipo de risco.');
-
-    const payload = { tipoRisco: riscoForm.tipoRisco.trim(), score: parseNumber(riscoForm.score), limite: parseNumber(riscoForm.limite), dataReferencia: riscoForm.dataReferencia ? new Date(`${riscoForm.dataReferencia}T00:00:00`).toISOString() : null, observacoes: riscoForm.observacoes.trim() || null };
-    try {
-      if (riscoForm.id) await http.put(`/cadastros/sacados/${sacadoId}/risco/${riscoForm.id}`, payload); else await http.post(`/cadastros/sacados/${sacadoId}/risco`, payload);
-      setRiscoForm({ id: '', tipoRisco: '', score: '', limite: '', dataReferencia: '', observacoes: '' });
-      await loadSubTabs(sacadoId);
-    } catch (e) { toast.error(getErrorMessage(e)); }
-  };
-
   const saveRepresentante = async () => {
     if (!sacadoId) return;
     if (!representanteForm.representanteId) return void toast.error('Selecione um representante.');
@@ -208,20 +178,6 @@ export const SacadoFormPage = () => {
         await http.post(`/cadastros/sacados/${sacadoId}/representantes`, { representanteId: representanteForm.representanteId, funcao: representanteForm.funcao.trim() || null });
       }
       setRepresentanteForm({ id: '', representanteId: '', funcao: '', ativo: true });
-      await loadSubTabs(sacadoId);
-    } catch (e) { toast.error(getErrorMessage(e)); }
-  };
-
-  const saveDiligencia = async () => {
-    if (!sacadoId) return;
-    if (!diligenciaForm.tipoDiligencia.trim()) return void toast.error('Informe o tipo de diligência.');
-    if (!diligenciaForm.status.trim()) return void toast.error('Informe o status.');
-    if (!diligenciaForm.dataSolicitacao) return void toast.error('Informe a data de solicitação.');
-
-    const payload = { tipoDiligencia: diligenciaForm.tipoDiligencia.trim(), status: diligenciaForm.status.trim(), dataSolicitacao: new Date(`${diligenciaForm.dataSolicitacao}T00:00:00`).toISOString(), dataConclusao: diligenciaForm.dataConclusao ? new Date(`${diligenciaForm.dataConclusao}T00:00:00`).toISOString() : null, observacoes: diligenciaForm.observacoes.trim() || null };
-    try {
-      if (diligenciaForm.id) await http.put(`/cadastros/sacados/${sacadoId}/diligencia/${diligenciaForm.id}`, payload); else await http.post(`/cadastros/sacados/${sacadoId}/diligencia`, payload);
-      setDiligenciaForm({ id: '', tipoDiligencia: '', status: '', dataSolicitacao: '', dataConclusao: '', observacoes: '' });
       await loadSubTabs(sacadoId);
     } catch (e) { toast.error(getErrorMessage(e)); }
   };
@@ -295,30 +251,12 @@ export const SacadoFormPage = () => {
       </div><div className="entity-actions"><button type="button" className="btn-main" onClick={() => void saveContato()}>{contatoForm.id ? 'Salvar contato' : 'Adicionar contato'}</button></div></section>
       <section className="entity-table-wrap"><table><thead><tr><th>Tipo</th><th>Nome</th><th>E-mail</th><th>Telefone 1</th><th>Telefone 2</th><th className="col-actions">Ações</th></tr></thead><tbody>{contatos.map((x) => <tr key={x.id}><td>{x.tipoContato || '-'}</td><td>{x.nome}</td><td>{x.email}</td><td>{applyPhoneMask(x.telefone1)}</td><td>{x.telefone2 ? applyPhoneMask(x.telefone2) : '-'}</td><td className="col-actions"><div className="table-actions"><button type="button" onClick={() => setContatoForm({ id: x.id, tipoContato: x.tipoContato ?? '', nome: x.nome, email: x.email, telefone1: applyPhoneMask(x.telefone1), telefone2: applyPhoneMask(x.telefone2 ?? '') })}>Editar</button><button type="button" className="danger" onClick={() => void removeItem(`/cadastros/sacados/${sacadoId}/contatos/${x.id}`, 'Remover contato?')}>Remover</button></div></td></tr>)}{contatos.length === 0 && <tr><td colSpan={6}>Nenhum contato cadastrado.</td></tr>}</tbody></table></section></section>}
 
-      {activeTab === 'risco' && <section className="entity-form-stack"><section className="entity-card"><div className="entity-grid cols-3">
-        <label><span>Tipo</span><input value={riscoForm.tipoRisco} onChange={(e) => setRiscoForm((p) => ({ ...p, tipoRisco: e.target.value }))} /></label>
-        <label><span>Score</span><input value={riscoForm.score} onChange={(e) => setRiscoForm((p) => ({ ...p, score: e.target.value }))} /></label>
-        <label><span>Limite</span><input value={riscoForm.limite} onChange={(e) => setRiscoForm((p) => ({ ...p, limite: e.target.value }))} /></label>
-        <label><span>Referência</span><input type="date" value={riscoForm.dataReferencia} onChange={(e) => setRiscoForm((p) => ({ ...p, dataReferencia: e.target.value }))} /></label>
-        <label className="span-all"><span>Observações</span><textarea value={riscoForm.observacoes} onChange={(e) => setRiscoForm((p) => ({ ...p, observacoes: e.target.value }))} /></label>
-      </div><div className="entity-actions"><button type="button" className="btn-main" onClick={() => void saveRisco()}>{riscoForm.id ? 'Salvar risco' : 'Adicionar risco'}</button></div></section>
-      <section className="entity-table-wrap"><table><thead><tr><th>Tipo</th><th>Score</th><th>Limite</th><th>Referência</th><th>Observações</th><th className="col-actions">Ações</th></tr></thead><tbody>{riscos.map((x) => <tr key={x.id}><td>{x.tipoRisco}</td><td>{x.score ?? '-'}</td><td>{x.limite ?? '-'}</td><td>{x.dataReferencia ? formatDateTime(x.dataReferencia) : '-'}</td><td>{x.observacoes ?? '-'}</td><td className="col-actions"><div className="table-actions"><button type="button" onClick={() => setRiscoForm({ id: x.id, tipoRisco: x.tipoRisco, score: x.score?.toString() ?? '', limite: x.limite?.toString() ?? '', dataReferencia: toDateInput(x.dataReferencia), observacoes: x.observacoes ?? '' })}>Editar</button><button type="button" className="danger" onClick={() => void removeItem(`/cadastros/sacados/${sacadoId}/risco/${x.id}`, 'Remover risco?')}>Remover</button></div></td></tr>)}{riscos.length === 0 && <tr><td colSpan={6}>Nenhum risco cadastrado.</td></tr>}</tbody></table></section></section>}
-
       {activeTab === 'representantes' && <section className="entity-form-stack"><section className="entity-card"><div className="entity-grid cols-3">
         <label><span>Representante</span><select value={representanteForm.representanteId} disabled={!!representanteForm.id} onChange={(e) => setRepresentanteForm((p) => ({ ...p, representanteId: e.target.value }))}><option value="">Selecione</option>{representanteOptions.map((x) => <option key={x.id} value={x.id}>{x.nome} ({formatCpfCnpj(x.cnpjCpf)})</option>)}</select></label>
         <label><span>Função</span><input value={representanteForm.funcao} onChange={(e) => setRepresentanteForm((p) => ({ ...p, funcao: e.target.value }))} /></label>
         <label className="checkbox-inline"><input type="checkbox" checked={representanteForm.ativo} disabled={!representanteForm.id} onChange={(e) => setRepresentanteForm((p) => ({ ...p, ativo: e.target.checked }))} /><span>Vínculo ativo</span></label>
       </div><div className="entity-actions"><button type="button" className="btn-main" onClick={() => void saveRepresentante()}>{representanteForm.id ? 'Salvar vínculo' : 'Vincular representante'}</button></div></section>
       <section className="entity-table-wrap"><table><thead><tr><th>Representante</th><th>Documento</th><th>Função</th><th>Status</th><th className="col-actions">Ações</th></tr></thead><tbody>{representantes.map((x) => <tr key={x.id}><td>{x.nomeRepresentante}</td><td>{formatCpfCnpj(x.documentoRepresentante)}</td><td>{x.funcao ?? '-'}</td><td>{x.ativo ? 'Ativo' : 'Inativo'}</td><td className="col-actions"><div className="table-actions"><button type="button" onClick={() => setRepresentanteForm({ id: x.id, representanteId: x.representanteId, funcao: x.funcao ?? '', ativo: x.ativo })}>Editar</button><button type="button" className="danger" onClick={() => void removeItem(`/cadastros/sacados/${sacadoId}/representantes/${x.id}`, 'Remover vínculo?')}>Remover</button></div></td></tr>)}{representantes.length === 0 && <tr><td colSpan={5}>Nenhum representante vinculado.</td></tr>}</tbody></table></section></section>}
-
-      {activeTab === 'diligencia' && <section className="entity-form-stack"><section className="entity-card"><div className="entity-grid cols-3">
-        <label><span>Tipo</span><input value={diligenciaForm.tipoDiligencia} onChange={(e) => setDiligenciaForm((p) => ({ ...p, tipoDiligencia: e.target.value }))} /></label>
-        <label><span>Status</span><input value={diligenciaForm.status} onChange={(e) => setDiligenciaForm((p) => ({ ...p, status: e.target.value }))} /></label>
-        <label><span>Solicitação</span><input type="date" value={diligenciaForm.dataSolicitacao} onChange={(e) => setDiligenciaForm((p) => ({ ...p, dataSolicitacao: e.target.value }))} /></label>
-        <label><span>Conclusão</span><input type="date" value={diligenciaForm.dataConclusao} onChange={(e) => setDiligenciaForm((p) => ({ ...p, dataConclusao: e.target.value }))} /></label>
-        <label className="span-all"><span>Observações</span><textarea value={diligenciaForm.observacoes} onChange={(e) => setDiligenciaForm((p) => ({ ...p, observacoes: e.target.value }))} /></label>
-      </div><div className="entity-actions"><button type="button" className="btn-main" onClick={() => void saveDiligencia()}>{diligenciaForm.id ? 'Salvar diligência' : 'Adicionar diligência'}</button></div></section>
-      <section className="entity-table-wrap"><table><thead><tr><th>Tipo</th><th>Status</th><th>Solicitação</th><th>Conclusão</th><th>Observações</th><th className="col-actions">Ações</th></tr></thead><tbody>{diligencias.map((x) => <tr key={x.id}><td>{x.tipoDiligencia}</td><td>{x.status}</td><td>{formatDateTime(x.dataSolicitacao)}</td><td>{x.dataConclusao ? formatDateTime(x.dataConclusao) : '-'}</td><td>{x.observacoes ?? '-'}</td><td className="col-actions"><div className="table-actions"><button type="button" onClick={() => setDiligenciaForm({ id: x.id, tipoDiligencia: x.tipoDiligencia, status: x.status, dataSolicitacao: toDateInput(x.dataSolicitacao), dataConclusao: toDateInput(x.dataConclusao), observacoes: x.observacoes ?? '' })}>Editar</button><button type="button" className="danger" onClick={() => void removeItem(`/cadastros/sacados/${sacadoId}/diligencia/${x.id}`, 'Remover diligência?')}>Remover</button></div></td></tr>)}{diligencias.length === 0 && <tr><td colSpan={6}>Nenhuma diligência cadastrada.</td></tr>}</tbody></table></section></section>}
 
       {activeTab === 'anexos' && <section className="entity-form-stack"><section className="entity-card"><div className="entity-grid cols-2"><label><span>Arquivo</span><input type="file" onChange={(e) => setAnexoFile(e.target.files?.[0] ?? null)} /></label><div className="entity-inline-actions"><button type="button" className="btn-main" onClick={() => void uploadAnexo()}>Enviar anexo</button></div></div></section>
       <section className="entity-table-wrap"><table><thead><tr><th>Arquivo</th><th>Tipo</th><th>Tamanho</th><th>Data</th><th className="col-actions">Ações</th></tr></thead><tbody>{anexos.map((x) => <tr key={x.id}><td>{x.nomeArquivo}</td><td>{x.contentType}</td><td>{x.tamanhoBytes}</td><td>{formatDateTime(x.createdAt)}</td><td className="col-actions"><div className="table-actions"><button type="button" className="danger" onClick={() => void removeItem(`/cadastros/sacados/${sacadoId}/anexos/${x.id}`, 'Remover anexo?')}>Remover</button></div></td></tr>)}{anexos.length === 0 && <tr><td colSpan={5}>Nenhum anexo cadastrado.</td></tr>}</tbody></table></section></section>}
