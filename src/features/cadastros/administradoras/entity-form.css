@@ -149,14 +149,27 @@
 
 .checkbox-grid-item {
   display: flex !important;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.45rem;
-  min-height: 39px;
   padding-top: 0;
 }
 
 .checkbox-grid-item span {
   font-size: 0.87rem;
+  color: #3d516a;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.checkbox-grid-item input[type='checkbox'] {
+  margin-top: 0.12rem;
+}
+
+.checkbox-list-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 0.5rem 1rem;
+  align-items: start;
 }
 
 .entity-inline-actions {
@@ -241,11 +254,16 @@
   .entity-grid.cols-3 {
     grid-template-columns: repeat(2, minmax(190px, 1fr));
   }
+
+  .checkbox-list-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
   .entity-grid.cols-3,
-  .entity-grid.cols-2 {
+  .entity-grid.cols-2,
+  .checkbox-list-grid {
     grid-template-columns: 1fr;
   }
 

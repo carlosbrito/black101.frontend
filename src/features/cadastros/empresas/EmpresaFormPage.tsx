@@ -107,7 +107,6 @@ const receiveMediumFlags: Array<{ key: string; label: string }> = [
 ];
 
 const allBooleanFlags = [
-  'habilitado',
   ...receivedTypeFlags.map((x) => x.key),
   ...receiveMediumFlags.map((x) => x.key),
 ] as const;
@@ -538,10 +537,6 @@ export const EmpresaFormPage = () => {
             {modalidades.map((item) => <option key={item.id} value={item.id}>{item.nome} ({item.codigo})</option>)}
           </select>
         </label>
-        <label className="checkbox-inline">
-          <input type="checkbox" checked={Boolean(parametrizacaoForm.habilitado)} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, habilitado: event.target.checked }))} />
-          <span>Habilitado</span>
-        </label>
       </div>
       <section className="entity-card">
         <header><h3>Parâmetros</h3></header>
@@ -560,7 +555,7 @@ export const EmpresaFormPage = () => {
       </section>
       <section className="entity-card">
         <header><h3>Tipos de Recebível</h3></header>
-        <div className="entity-grid cols-3">
+        <div className="checkbox-list-grid">
           {receivedTypeFlags.map((item) => (
             <label className="checkbox-grid-item" key={item.key}>
               <input type="checkbox" checked={Boolean(parametrizacaoForm[item.key])} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, [item.key]: event.target.checked }))} />
@@ -571,7 +566,7 @@ export const EmpresaFormPage = () => {
       </section>
       <section className="entity-card">
         <header><h3>Meios de Recebimento</h3></header>
-        <div className="entity-grid cols-3">
+        <div className="checkbox-list-grid">
           {receiveMediumFlags.map((item) => (
             <label className="checkbox-grid-item" key={item.key}>
               <input type="checkbox" checked={Boolean(parametrizacaoForm[item.key])} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, [item.key]: event.target.checked }))} />
@@ -587,12 +582,11 @@ export const EmpresaFormPage = () => {
       </div>
       <section className="entity-table-wrap">
         <table>
-          <thead><tr><th>Modalidade</th><th>Habilitado</th><th>Limite</th><th>Taxa Min/Max</th><th className="col-actions">Ações</th></tr></thead>
+          <thead><tr><th>Modalidade</th><th>Limite</th><th>Taxa Min/Max</th><th className="col-actions">Ações</th></tr></thead>
           <tbody>
             {parametrizacoes.map((item) => (
               <tr key={item.id}>
                 <td>{item.modalidadeNome}</td>
-                <td>{item.habilitado ? 'Sim' : 'Não'}</td>
                 <td>{item.limite ?? '-'}</td>
                 <td>{item.taxaMinima ?? '-'} / {item.taxaMaxima ?? '-'}</td>
                 <td className="col-actions">
@@ -603,7 +597,7 @@ export const EmpresaFormPage = () => {
                 </td>
               </tr>
             ))}
-            {parametrizacoes.length === 0 ? <tr><td colSpan={5}>Nenhuma parametrização cadastrada.</td></tr> : null}
+            {parametrizacoes.length === 0 ? <tr><td colSpan={4}>Nenhuma parametrização cadastrada.</td></tr> : null}
           </tbody>
         </table>
       </section>
