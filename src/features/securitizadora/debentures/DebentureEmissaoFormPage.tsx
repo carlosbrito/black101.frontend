@@ -257,12 +257,7 @@ export const DebentureEmissaoFormPage = () => {
     }
 
     if (toDecimal(serieForm.taxa) < 0) {
-      toast.error('Taxa inválida.');
-      return false;
-    }
-
-    if (Number(serieForm.quantidade) <= 0) {
-      toast.error('Quantidade da série inválida.');
+      toast.error('Taxa percentual inválida.');
       return false;
     }
 
@@ -296,11 +291,19 @@ export const DebentureEmissaoFormPage = () => {
       return;
     }
 
+    const quantidadeSerie = serieForm.id
+      ? Number(serieForm.quantidade)
+      : quantidadeTotalCalculada;
+    if (quantidadeSerie <= 0) {
+      toast.error('A emissão deve possuir quantidade total válida para criar série.');
+      return;
+    }
+
     const payload = {
       codigoSerie: serieForm.codigoSerie.trim(),
       indice: Number(serieForm.indice),
       taxa: toDecimal(serieForm.taxa),
-      quantidade: Number(serieForm.quantidade),
+      quantidade: quantidadeSerie,
       valorUnitario: toDecimal(serieForm.valorUnitario),
       dataVencimento: serieForm.dataVencimento,
       ativa: serieForm.ativa,
@@ -496,7 +499,7 @@ export const DebentureEmissaoFormPage = () => {
           <form className="entity-card" onSubmit={onSaveSerie}>
             <header>
               <h3>{serieForm.id ? 'Editar Série' : 'Nova Série'}</h3>
-              <p>Configure as séries da emissão com índice, taxa e quantidade.</p>
+              <p>Configure as séries da emissão com índice e taxa percentual.</p>
             </header>
 
             <div className="entity-grid cols-3">
@@ -513,12 +516,12 @@ export const DebentureEmissaoFormPage = () => {
                 </select>
               </label>
               <label>
-                <span>Taxa</span>
+                <span>Taxa (%)</span>
                 <input type="number" min="0" step="0.000001" value={serieForm.taxa} onChange={(event) => setSerieForm((prev) => ({ ...prev, taxa: event.target.value }))} required />
               </label>
               <label>
-                <span>Quantidade</span>
-                <input type="number" min="1" step="1" value={serieForm.quantidade} onChange={(event) => setSerieForm((prev) => ({ ...prev, quantidade: event.target.value }))} required />
+                <span>Quantidade (automática)</span>
+                <input type="text" value={(serieForm.id ? Number(serieForm.quantidade) : quantidadeTotalCalculada).toString()} readOnly />
               </label>
               <label>
                 <span>Valor Unitário</span>
@@ -527,10 +530,6 @@ export const DebentureEmissaoFormPage = () => {
               <label>
                 <span>Vencimento</span>
                 <input type="date" value={serieForm.dataVencimento} onChange={(event) => setSerieForm((prev) => ({ ...prev, dataVencimento: event.target.value }))} required />
-              </label>
-              <label className="checkbox-inline">
-                <input type="checkbox" checked={serieForm.ativa} onChange={(event) => setSerieForm((prev) => ({ ...prev, ativa: event.target.checked }))} />
-                <span>Série ativa</span>
               </label>
             </div>
 
@@ -575,7 +574,7 @@ export const DebentureEmissaoFormPage = () => {
                       <tr key={serie.id}>
                         <td>{serie.codigoSerie}</td>
                         <td>{debentureIndiceTipoLabel[serie.indice] ?? '-'}</td>
-                        <td>{serie.taxa}</td>
+                        <td>{serie.taxa}%</td>
                         <td>{serie.quantidade}</td>
                         <td>{serie.quantidadeDisponivel}</td>
                         <td>{serie.valorUnitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
