@@ -24,8 +24,11 @@ type ImportacaoDetails = ImportacaoItem & {
   fileKey?: string;
 };
 
-const origens = ['Cnab', 'Xml', 'Zip', 'Excel'];
-const tiposCnab = ['Cnab2xx', 'Cnab4xx', 'Cnab5xx'];
+type CedenteAtivoOption = {
+  id: string;
+  nome: string;
+  cnpjCpf: string;
+};
 
 const inferTipoArquivo = (fileName: string) => {
   const ext = fileName.split('.').pop()?.toLowerCase();
@@ -49,12 +52,10 @@ export const ImportacoesPage = () => {
   const [file, setFile] = useState<File | null>(null);
   const [fileHash, setFileHash] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+  const [cedentesAtivos, setCedentesAtivos] = useState<CedenteAtivoOption[]>([]);
+  const [cedentesLoading, setCedentesLoading] = useState(false);
 
   const [form, setForm] = useState({
-    fidcId: '',
-    origem: 'Cnab',
-    tipoBanco: '',
-    tipoCnab: '',
     modalidade: '',
     cedenteId: '',
   });
@@ -91,6 +92,33 @@ export const ImportacoesPage = () => {
   useEffect(() => {
     void list();
   }, [page, pageSize]);
+
+  const loadCedentesAtivos = async () => {
+    setCedentesLoading(true);
+    try {
+      const response = await http.get('/cadastros/cedentes/ativos');
+      const data = (response.data ?? []) as any[];
+      const options: CedenteAtivoOption[] = data.map((item) => ({
+        id: String(item.id ?? item.Id ?? ''),
+        nome: String(item.nome ?? item.Nome ?? ''),
+        cnpjCpf: String(item.cnpjCpf ?? item.CnpjCpf ?? ''),
+      })).filter((item) => item.id && item.nome);
+
+      setCedentesAtivos(options);
+      if (options.length === 0) {
+        setForm((current) => ({ ...current, cedenteId: '' }));
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+      setCedentesAtivos([]);
+    } finally {
+      setCedentesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadCedentesAtivos();
+  }, []);
 
   // Poll while there are items em processamento
   useEffect(() => {
@@ -133,21 +161,21 @@ export const ImportacoesPage = () => {
       toast.error('Selecione um arquivo.');
       return;
     }
-    if (!form.fidcId) {
-      toast.error('Selecione o FIDC.');
+    if (!form.cedenteId) {
+      toast.error('Selecione o cedente.');
+      return;
+    }
+    if (cedentesAtivos.length === 0) {
+      toast.error('Não há cedentes ativos disponíveis para importação.');
       return;
     }
     setSubmitting(true);
     try {
       const data = new FormData();
       data.append('arquivo', file);
-      data.append('fidcId', form.fidcId);
-      data.append('origem', form.origem);
       data.append('tipoArquivo', inferTipoArquivo(file.name));
-      if (form.tipoBanco) data.append('tipoBanco', form.tipoBanco);
-      if (form.tipoCnab) data.append('tipoCnab', form.tipoCnab);
       if (form.modalidade) data.append('modalidade', form.modalidade);
-      if (form.cedenteId) data.append('cedenteId', form.cedenteId);
+      data.append('cedenteId', form.cedenteId);
       if (fileHash) data.append('fileHash', fileHash);
 
       const response = await http.post('/operacoes/importacoes', data, {
@@ -216,50 +244,6 @@ export const ImportacoesPage = () => {
           </header>
           <form className="form-grid" onSubmit={submit}>
             <label>
-              FIDC ID*
-              <input
-                value={form.fidcId}
-                onChange={(e) => setForm((f) => ({ ...f, fidcId: e.target.value }))}
-                placeholder="GUID do FIDC"
-                required
-              />
-            </label>
-            <label>
-              Origem*
-              <select
-                value={form.origem}
-                onChange={(e) => setForm((f) => ({ ...f, origem: e.target.value }))}
-              >
-                {origens.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Banco (CNAB)
-              <input
-                value={form.tipoBanco}
-                onChange={(e) => setForm((f) => ({ ...f, tipoBanco: e.target.value }))}
-                placeholder="237, 341, ..."
-              />
-            </label>
-            <label>
-              Layout CNAB
-              <select
-                value={form.tipoCnab}
-                onChange={(e) => setForm((f) => ({ ...f, tipoCnab: e.target.value }))}
-              >
-                <option value="">Selecione (opcional)</option>
-                {tiposCnab.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
               Modalidade
               <input
                 value={form.modalidade}
@@ -268,13 +252,26 @@ export const ImportacoesPage = () => {
               />
             </label>
             <label>
-              Cedente Id
-              <input
+              Cedente*
+              <select
                 value={form.cedenteId}
                 onChange={(e) => setForm((f) => ({ ...f, cedenteId: e.target.value }))}
-                placeholder="Opcional"
-              />
+                required
+                disabled={cedentesLoading || cedentesAtivos.length === 0}
+              >
+                <option value="">
+                  {cedentesLoading ? 'Carregando cedentes...' : 'Selecione um cedente'}
+                </option>
+                {cedentesAtivos.map((cedente) => (
+                  <option key={cedente.id} value={cedente.id}>
+                    {cedente.nome} ({cedente.cnpjCpf})
+                  </option>
+                ))}
+              </select>
             </label>
+            {!cedentesLoading && cedentesAtivos.length === 0 ? (
+              <small>Nenhum cedente ativo disponível no momento.</small>
+            ) : null}
 
             <label className="file-input">
               Arquivo*
@@ -294,7 +291,11 @@ export const ImportacoesPage = () => {
             </label>
 
             <div className="actions-row">
-              <button type="submit" className="btn-main" disabled={submitting}>
+              <button
+                type="submit"
+                className="btn-main"
+                disabled={submitting || cedentesLoading || cedentesAtivos.length === 0}
+              >
                 {submitting ? 'Enviando...' : 'Enviar para processamento'}
               </button>
             </div>
