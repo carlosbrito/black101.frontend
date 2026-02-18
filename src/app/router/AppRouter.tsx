@@ -33,6 +33,8 @@ import {
 } from '../../features/cadastros/CadastroPages';
 import { MovimentacoesPage } from '../../features/financeiro/MovimentacoesPage';
 import { OperacoesPage } from '../../features/operacoes/OperationsPage';
+import { ImportacoesPage } from '../../features/operacoes/ImportacoesPage';
+import { WorkersPage } from '../../features/operacoes/WorkersPage';
 import { AdministradoraFormPage } from '../../features/cadastros/administradoras/AdministradoraFormPage';
 import { AgenteFormPage } from '../../features/cadastros/agentes/AgenteFormPage';
 import { BancoFormPage } from '../../features/cadastros/bancos/BancoFormPage';
@@ -93,6 +95,8 @@ export const AppRouter = () => {
           <Route path="/cadastro/testemunhas" element={<TestemunhasPage />} />
           <Route path="/financeiro/movimentacoes" element={<MovimentacoesPage />} />
           <Route path="/operacoes" element={<OperacoesPage />} />
+          <Route path="/operacoes/importacoes" element={<ImportacoesPage />} />
+          <Route path="/operacoes/workers" element={<WorkersPage />} />
 
           <Route path="/admin/usuarios" element={<AdminUsuariosPage />} />
           <Route path="/admin/roles" element={<AdminRolesPage />} />

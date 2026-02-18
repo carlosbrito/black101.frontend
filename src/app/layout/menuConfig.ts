@@ -76,6 +76,7 @@ export const legacyMenu: MenuGroup[] = [
     label: 'Operações',
     childrens: [
       { label: 'Operações', route: '/operacoes' },
+      { label: 'Importar Operações', route: '/operacoes/importacoes' },
       { label: 'Registros', route: c('gestora/registros') },
       { label: 'Recebíveis', route: c('operation/documentsv2') },
       { label: 'Recebíveis Gestora', route: c('gestora/recebiveis') },
@@ -91,6 +92,7 @@ export const legacyMenu: MenuGroup[] = [
       { label: 'Monitoramento NFe', route: c('operation/monitoramento-nfe') },
       { label: 'Revisão dos Fundos', route: c('gestora/net-worth') },
       { label: 'Simulador', route: c('operation/simulador') },
+      { label: 'Workers', route: '/operacoes/workers' },
     ],
   },
   {
