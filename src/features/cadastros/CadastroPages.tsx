@@ -6,6 +6,7 @@ export { CedentesPage } from './cedentes/CedentesListPage';
 export { SacadosPage } from './sacados/SacadosListPage';
 export { BancarizadoresPage } from './bancarizadores/BancarizadoresPage';
 export { TestemunhasPage } from './testemunhas/TestemunhasListPage';
+export { ModalidadesPage } from './modalidades/ModalidadesListPage';
 export {
   ConsultorasPage,
   CustodiantePage,

@@ -15,6 +15,7 @@ export const legacyMenu: MenuGroup[] = [
       { label: 'Custodiantes', route: '/cadastro/custodiantes' },
       { label: 'Certificadoras', route: '/cadastro/certificadoras' },
       { label: 'Empresas', route: '/cadastro/empresas' },
+      { label: 'Modalidades', route: '/cadastro/modalidades' },
       { label: 'Regulamento', route: '/cadastro/produtos' },
       { label: 'Fornecedores', route: '/cadastro/fornecedores' },
       { label: 'Gestoras', route: '/cadastro/gestoras' },

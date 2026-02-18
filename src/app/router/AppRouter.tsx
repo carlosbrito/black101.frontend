@@ -32,6 +32,7 @@ import {
   InvestidoresPage,
   SacadosPage,
   TestemunhasPage,
+  ModalidadesPage,
 } from '../../features/cadastros/CadastroPages';
 import { MovimentacoesPage } from '../../features/financeiro/MovimentacoesPage';
 import { OperacoesPage } from '../../features/operacoes/OperationsPage';
@@ -45,13 +46,14 @@ import { RepresentanteFormPage } from '../../features/cadastros/representantes/R
 import { SacadoFormPage } from '../../features/cadastros/sacados/SacadoFormPage';
 import { BancarizadorFormPage } from '../../features/cadastros/bancarizadores/BancarizadorFormPage';
 import { TestemunhaFormPage } from '../../features/cadastros/testemunhas/TestemunhaFormPage';
+import { ModalidadeFormPage } from '../../features/cadastros/modalidades/ModalidadeFormPage';
+import { EmpresaFormPage } from '../../features/cadastros/empresas/EmpresaFormPage';
 import {
   ConsultoraFormPage,
   CustodianteFormPage,
   GestoraFormPage,
   FornecedorFormPage,
   EmitenteFormPage,
-  EmpresaFormPage,
   PrestadorFormPage,
   InvestidorFormPage,
 } from '../../features/cadastros/basicos/BasicosFormPages';
@@ -125,6 +127,9 @@ export const AppRouter = () => {
           <Route path="/cadastro/empresas" element={<EmpresasPage />} />
           <Route path="/cadastro/empresas/novo" element={<EmpresaFormPage />} />
           <Route path="/cadastro/empresas/:id" element={<EmpresaFormPage />} />
+          <Route path="/cadastro/modalidades" element={<ModalidadesPage />} />
+          <Route path="/cadastro/modalidades/novo" element={<ModalidadeFormPage />} />
+          <Route path="/cadastro/modalidades/:id" element={<ModalidadeFormPage />} />
           <Route path="/cadastro/whitelist" element={<WhiteListPage />} />
           <Route path="/cadastro/blacklist" element={<BlackListPage />} />
           <Route path="/cadastro/prestadores" element={<PrestadoresPage />} />

@@ -147,6 +147,18 @@
   font-size: 0.87rem;
 }
 
+.checkbox-grid-item {
+  display: flex !important;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 39px;
+  padding-top: 0;
+}
+
+.checkbox-grid-item span {
+  font-size: 0.87rem;
+}
+
 .entity-inline-actions {
   display: flex;
   align-items: flex-end;
