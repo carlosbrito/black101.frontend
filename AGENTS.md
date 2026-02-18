@@ -36,6 +36,7 @@ Use npm scripts from `package.json`:
 - Existing history favors short, imperative commit messages in Portuguese (example: `Adiciona ...`, `Corrige ...`).
 - Prefer format: `<area>: <ação objetiva>` (example: `cadastros: corrige validação de CNPJ`).
 - Avoid vague commits (for example single-letter subjects).
+- Perform commits automatically after each implementation, following market-standard commit message conventions.
 - PRs should include: objective, affected routes/modules, test evidence (`npm run lint`, `npm run e2e`), and screenshots/GIFs for UI changes.
 
 ## Security & Configuration Tips
