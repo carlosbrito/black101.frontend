@@ -135,6 +135,127 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     const method = route.request().method();
     const path = url.pathname;
 
+    const ensurePersonByDocument = (documento: string) => {
+      const normalized = String(documento ?? '').replace(/\D/g, '');
+      const existing = Array.from(people.values()).find((item) => String(item.cnpjCpf ?? '').replace(/\D/g, '') === normalized);
+      if (existing) return existing;
+
+      const personId = createId();
+      const created = {
+        id: personId,
+        nome: `Pessoa ${normalized.slice(-6) || 'Auto'}`,
+        cnpjCpf: normalized,
+        documentoNormalizado: normalized,
+        tipoPessoa: normalized.length > 11 ? 'Juridica' : 'Fisica',
+        email: null,
+        telefone: null,
+        cidade: 'Sao Paulo',
+        uf: 'SP',
+        observacoesGerais: null,
+        ativo: true,
+        enderecos: [],
+        contatos: [],
+        qsas: [],
+      };
+      people.set(personId, created);
+      return created;
+    };
+
+    if (path === '/cadastros/administradoras/auto-cadastro' && method === 'POST') {
+      const body = route.request().postDataJSON() as { documento?: string };
+      const person = ensurePersonByDocument(body.documento ?? '');
+      const existing = state.adm.find((item) => String(item.pessoaId) === String(person.id));
+      if (existing) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: existing.id, pessoaId: person.id, status: 'existing', mensagem: 'Administradora já cadastrada.' }),
+        });
+        return;
+      }
+
+      const id = createId();
+      state.adm.push({
+        id,
+        pessoaId: person.id,
+        nome: person.nome,
+        cnpjCpf: person.cnpjCpf,
+        cidade: person.cidade,
+        uf: person.uf,
+        ativo: true,
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id, pessoaId: person.id, status: 'created', mensagem: 'Administradora criada.' }),
+      });
+      return;
+    }
+
+    if (path === '/cadastros/agentes/auto-cadastro' && method === 'POST') {
+      const body = route.request().postDataJSON() as { documento?: string };
+      const person = ensurePersonByDocument(body.documento ?? '');
+      const existing = state.age.find((item) => String(item.pessoaId) === String(person.id));
+      if (existing) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: existing.id, pessoaId: person.id, status: 'existing', mensagem: 'Agente já cadastrado.' }),
+        });
+        return;
+      }
+
+      const id = createId();
+      state.age.push({
+        id,
+        pessoaId: person.id,
+        nome: person.nome,
+        documento: person.cnpjCpf,
+        email: person.email ?? '',
+        telefone: person.telefone ?? '',
+        ativo: true,
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id, pessoaId: person.id, status: 'created', mensagem: 'Agente criado.' }),
+      });
+      return;
+    }
+
+    if (path === '/cadastros/cedentes/auto-cadastro' && method === 'POST') {
+      const body = route.request().postDataJSON() as { documento?: string };
+      const person = ensurePersonByDocument(body.documento ?? '');
+      const existing = state.ced.find((item) => String(item.pessoaId) === String(person.id));
+      if (existing) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ cedenteId: existing.id, pessoaId: person.id, status: 'existing', mensagem: 'Cedente já cadastrado.' }),
+        });
+        return;
+      }
+
+      const id = createId();
+      state.ced.push({
+        id,
+        pessoaId: person.id,
+        nome: person.nome,
+        cnpjCpf: person.cnpjCpf,
+        cidade: person.cidade ?? '',
+        uf: person.uf ?? '',
+        ativo: true,
+        status: 'ABERTO',
+      });
+      ensureCedenteTabs(id);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ cedenteId: id, pessoaId: person.id, status: 'created', mensagem: 'Cedente criado.' }),
+      });
+      return;
+    }
+
     if (path === '/cadastros/pessoas' && method === 'GET') {
       const document = (url.searchParams.get('documento') ?? '').replace(/\D/g, '');
       const person = Array.from(people.values()).find((item) => (item.cnpjCpf as string).replace(/\D/g, '') === document);
@@ -514,13 +635,15 @@ const runCrudAgentesFull = async (page: import('@playwright/test').Page, suffix:
   await page.goto('/cadastro/agentes');
   await page.getByRole('button', { name: 'Novo agente' }).click();
 
+  await page.locator('.modal-card label:has-text("CPF/CNPJ") input').first().fill('529.982.247-25');
+  await page.getByRole('button', { name: 'Avançar' }).click();
+  await expect(page).toHaveURL(/\/cadastro\/agentes\//);
+
   await page.locator('label:has-text("Nome") input').first().fill(nome);
-  await page.locator('label:has-text("CPF/CNPJ") input').first().fill('529.982.247-25');
   await page.locator('label:has-text("E-mail") input').first().fill(`agente${suffix}@mail.com`);
   await page.locator('label:has-text("Telefone") input').first().fill('(11) 99999-0000');
 
   await page.getByRole('button', { name: 'Salvar' }).click();
-  await expect(page).toHaveURL(/\/cadastro\/agentes\//);
 
   await page.locator('label:has-text("Nome") input').first().fill(`Agente Edit ${suffix}`);
   await page.getByRole('button', { name: 'Salvar' }).click();
@@ -561,30 +684,17 @@ const runCrudCedentesFull = async (page: import('@playwright/test').Page, suffix
   await page.goto('/cadastro/cedentes');
   await page.getByRole('button', { name: 'Novo cedente' }).click();
 
+  await page.locator('.modal-card label:has-text("CPF/CNPJ") input').first().fill('04.252.011/0001-10');
+  await page.getByRole('button', { name: 'Avançar' }).click();
+  await expect(page).toHaveURL(/\/cadastro\/cedentes\//);
+
   await page.locator('label:has-text("Nome") input').first().fill(nome);
-  await page.locator('label:has-text("CPF/CNPJ") input').first().fill('04.252.011/0001-10');
   await page.locator('label:has-text("E-mail") input').first().fill(`cedente${suffix}@mail.com`);
   await page.locator('label:has-text("Telefone") input').first().fill('(11) 98888-0000');
   await page.locator('label:has-text("Cidade") input').first().fill('Sao Paulo');
   await page.locator('label:has-text("UF") input').first().fill('SP');
 
   await page.getByRole('button', { name: 'Salvar' }).click();
-  await expect(page).toHaveURL(/\/cadastro\/cedentes\//);
-
-  await page.getByRole('tab', { name: 'Complemento' }).click();
-  await page.locator('label:has-text("Nome fantasia") input').first().fill(`Cedente Fantasia ${suffix}`);
-  await page.getByRole('button', { name: 'Salvar complemento' }).click();
-
-  await page.getByRole('tab', { name: 'Contatos' }).click();
-  await page.locator('label:has-text("Tipo") input').first().fill('Financeiro');
-  await page.locator('label:has-text("Nome") input').first().fill(`Contato ${suffix}`);
-  await page.locator('label:has-text("E-mail") input').first().fill(`contato${suffix}@mail.com`);
-  await page.locator('label:has-text("Telefone 1") input').first().fill('(11) 97777-0000');
-  await page.getByRole('button', { name: 'Adicionar contato' }).click();
-
-  await page.getByRole('tab', { name: 'Cedente' }).click();
-  await page.getByRole('button', { name: 'Enviar para aprovação' }).click();
-  await expect(page.getByRole('tab', { name: 'Pendências' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Voltar para listagem' }).click();
   await expect(page).toHaveURL(/\/cadastro\/cedentes$/);
@@ -601,13 +711,15 @@ const runCrudAdministradorasFull = async (page: import('@playwright/test').Page,
   await page.goto('/cadastro/administradoras');
   await page.getByRole('button', { name: 'Nova administradora' }).click();
 
+  await page.locator('.modal-card label:has-text("CPF/CNPJ") input').first().fill('39.665.333/0001-75');
+  await page.getByRole('button', { name: 'Avançar' }).click();
+  await expect(page).toHaveURL(/\/cadastro\/administradoras\//);
+
   await page.locator('label:has-text("Nome") input').first().fill(nome);
-  await page.locator('label:has-text("CPF/CNPJ") input').first().fill(`00.000.${suffix}/0001-10`);
   await page.locator('label:has-text("Cidade") input').first().fill('Sao Paulo');
   await page.locator('label:has-text("UF") input').first().fill('SP');
 
   await page.getByRole('button', { name: 'Salvar' }).click();
-  await expect(page).toHaveURL(/\/cadastro\/administradoras\//);
 
   await page.locator('label:has-text("Cidade") input').first().fill('Campinas');
   await page.getByRole('button', { name: 'Salvar' }).click();

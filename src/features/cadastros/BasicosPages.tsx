@@ -1,24 +1,15 @@
-﻿import { CadastroCrudPage } from './CadastroCrudPage';
+import { CadastroCrudPage } from './CadastroCrudPage';
 import type { Column } from '../../shared/ui/DataTable';
 import { getErrorMessage, http } from '../../shared/api/http';
 import { sanitizeDocument } from './cadastroCommon';
 import toast from 'react-hot-toast';
+import { BasicoEntityListPage } from './basicos/BasicoEntityListPage';
 
 const tiposComCodigo = new Set(['Produto', 'WhiteList', 'BlackList']);
 
 const tiposPessoa = new Set([
-  'Consultora',
-  'Custodiante',
-  'Certificadora',
-  'Gestora',
-  'Fornecedor',
   'Registradora',
   'Credenciadora',
-  'Emitente',
-  'PrestadorServico',
-  'Investidor',
-  'Sacado',
-  'Testemunha',
 ]);
 
 const makeBasicoPage = (title: string, subtitle: string, endpoint: string, tipo: string) => {
@@ -88,22 +79,93 @@ const makeBasicoPage = (title: string, subtitle: string, endpoint: string, tipo:
   );
 };
 
-export const ConsultorasPage = () => makeBasicoPage('Consultoras', 'Cadastro de consultoras.', '/cadastros/consultoras', 'Consultora');
-export const CustodiantePage = () => makeBasicoPage('Custodiantes', 'Cadastro de custodiantes.', '/cadastros/custodiantes', 'Custodiante');
+export const ConsultorasPage = () => (
+  <BasicoEntityListPage
+    title="Cadastro de Consultoras"
+    subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
+    endpoint="/cadastros/consultoras"
+    routeBase="/cadastro/consultoras"
+    createLabel="Nova consultora"
+  />
+);
+
+export const CustodiantePage = () => (
+  <BasicoEntityListPage
+    title="Cadastro de Custodiantes"
+    subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
+    endpoint="/cadastros/custodiantes"
+    routeBase="/cadastro/custodiantes"
+    createLabel="Novo custodiante"
+  />
+);
+
+export const GestorasPage = () => (
+  <BasicoEntityListPage
+    title="Cadastro de Gestoras"
+    subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
+    endpoint="/cadastros/gestoras"
+    routeBase="/cadastro/gestoras"
+    createLabel="Nova gestora"
+  />
+);
+
+export const FornecedoresPage = () => (
+  <BasicoEntityListPage
+    title="Cadastro de Fornecedores"
+    subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
+    endpoint="/cadastros/fornecedores"
+    routeBase="/cadastro/fornecedores"
+    createLabel="Novo fornecedor"
+  />
+);
+
+export const EmitentesPage = () => (
+  <BasicoEntityListPage
+    title="Cadastro de Emitentes"
+    subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
+    endpoint="/cadastros/emitentes"
+    routeBase="/cadastro/emitentes"
+    createLabel="Novo emitente"
+  />
+);
+
+export const EmpresasPage = () => (
+  <BasicoEntityListPage
+    title="Cadastro de Empresas"
+    subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
+    endpoint="/cadastros/empresas"
+    routeBase="/cadastro/empresas"
+    createLabel="Nova empresa"
+  />
+);
+
+export const PrestadoresPage = () => (
+  <BasicoEntityListPage
+    title="Cadastro de Prestadores de Serviço"
+    subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
+    endpoint="/cadastros/prestadores"
+    routeBase="/cadastro/prestadores"
+    createLabel="Novo prestador"
+  />
+);
+
+export const InvestidoresPage = () => (
+  <BasicoEntityListPage
+    title="Cadastro de Investidores"
+    subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
+    endpoint="/cadastros/investidores"
+    routeBase="/cadastro/investidores"
+    createLabel="Novo investidor"
+  />
+);
+
 export const CertificadorasPage = () => makeBasicoPage('Certificadoras', 'Cadastro de certificadoras.', '/cadastros/certificadoras', 'Certificadora');
-export const GestorasPage = () => makeBasicoPage('Gestoras', 'Cadastro de gestoras.', '/cadastros/gestoras', 'Gestora');
-export const FornecedoresPage = () => makeBasicoPage('Fornecedores', 'Cadastro de fornecedores.', '/cadastros/fornecedores', 'Fornecedor');
 export const RegistradorasPage = () => makeBasicoPage('Registradoras', 'Cadastro de registradoras.', '/cadastros/registradoras', 'Registradora');
 export const CredenciadorasPage = () => makeBasicoPage('Credenciadoras', 'Cadastro de credenciadoras.', '/cadastros/credenciadoras', 'Credenciadora');
 export const ProdutosPage = () => makeBasicoPage('Produtos', 'Cadastro de produtos.', '/cadastros/basicos/Produto', 'Produto');
-export const EmitentesPage = () => makeBasicoPage('Emitentes', 'Cadastro de emitentes.', '/cadastros/emitentes', 'Emitente');
 export const WhiteListPage = () => makeBasicoPage('WhiteList', 'Cadastro de whitelist.', '/cadastros/basicos/WhiteList', 'WhiteList');
 export const BlackListPage = () => makeBasicoPage('Blacklist', 'Cadastro de blacklist.', '/cadastros/basicos/BlackList', 'BlackList');
-export const PrestadoresPage = () => makeBasicoPage('Prestadores de Serviço', 'Cadastro de prestadores.', '/cadastros/prestadores', 'PrestadorServico');
 export const DespesasPage = () => makeBasicoPage('Despesas', 'Cadastro de despesas.', '/cadastros/basicos/Despesa', 'Despesa');
 export const GrupoEconomicoPage = () => makeBasicoPage('Grupo Econômico', 'Cadastro de grupos econômicos.', '/cadastros/basicos/GrupoEconomico', 'GrupoEconomico');
 export const EsteiraCreditoPage = () => makeBasicoPage('Esteira de Crédito', 'Configuração da esteira de crédito.', '/cadastros/basicos/EsteiraCredito', 'EsteiraCredito');
 export const IndicesDebenturePage = () => makeBasicoPage('Índices Debênture', 'Cadastro de índices.', '/cadastros/basicos/IndiceDebenture', 'IndiceDebenture');
-export const InvestidoresPage = () => makeBasicoPage('Investidores', 'Cadastro de investidores.', '/cadastros/investidores', 'Investidor');
-export const SacadosPage = () => makeBasicoPage('Sacados', 'Cadastro de sacados.', '/cadastros/sacados', 'Sacado');
-export const TestemunhasPage = () => makeBasicoPage('Testemunhas', 'Cadastro de testemunhas.', '/cadastros/testemunhas', 'Testemunha');

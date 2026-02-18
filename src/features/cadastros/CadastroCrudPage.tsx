@@ -18,6 +18,7 @@ type FieldDef = {
 };
 
 type CrudRecord = { id: string; [key: string]: string | boolean | number | null | undefined };
+type AutoCreateResult = { id: string; status?: string; message?: string };
 
 const toBool = (value: unknown) => value === true || value === 'true' || value === 1;
 
@@ -44,6 +45,10 @@ export const CadastroCrudPage = ({
   defaultValues,
   withExtras = false,
   onDocumentoLookup,
+  createMode = 'default',
+  documentModalTitle = 'Novo registro',
+  documentFieldLabel = 'CPF/CNPJ',
+  onAutoCreateByDocumento,
 }: {
   title: string;
   subtitle: string;
@@ -53,6 +58,10 @@ export const CadastroCrudPage = ({
   defaultValues: Record<string, string | boolean>;
   withExtras?: boolean;
   onDocumentoLookup?: (doc: string) => Promise<Record<string, any> | null>;
+  createMode?: 'default' | 'documentOnly';
+  documentModalTitle?: string;
+  documentFieldLabel?: string;
+  onAutoCreateByDocumento?: (documento: string) => Promise<AutoCreateResult | null>;
 }) => {
   const [rows, setRows] = useState<CrudRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +82,9 @@ export const CadastroCrudPage = ({
   const [historicoTotalPages, setHistoricoTotalPages] = useState(1);
   const [uploading, setUploading] = useState(false);
   const [obsText, setObsText] = useState('');
+  const [documentModalOpen, setDocumentModalOpen] = useState(false);
+  const [documentValue, setDocumentValue] = useState('');
+  const [documentSubmitting, setDocumentSubmitting] = useState(false);
 
   const applyFieldMask = (field: FieldDef, value: string): string => {
     if (field.mask === 'cpfCnpj') return applyCpfCnpjMask(value);
@@ -145,7 +157,24 @@ export const CadastroCrudPage = ({
     void list();
   }, [page, pageSize]);
 
+  const openEditById = async (id: string) => {
+    const response = await http.get(`${endpoint}/${id}`);
+    const normalized = normalizeRows([response.data as unknown]);
+    const row = normalized[0];
+    if (!row) {
+      throw new Error('Registro não encontrado para edição.');
+    }
+
+    openEdit(row);
+  };
+
   const openCreate = () => {
+    if (createMode === 'documentOnly') {
+      setDocumentValue('');
+      setDocumentModalOpen(true);
+      return;
+    }
+
     setCurrent(null);
     setReadOnly(false);
     setForm({ ...defaultValues });
@@ -202,6 +231,42 @@ export const CadastroCrudPage = ({
       await list();
     } catch (error) {
       toast.error(getErrorMessage(error));
+    }
+  };
+
+  const onSubmitDocumentOnly = async (event: FormEvent) => {
+    event.preventDefault();
+
+    const raw = sanitizeDocument(documentValue);
+    if (!isValidCpfCnpj(raw)) {
+      toast.error('Informe um CPF/CNPJ válido.');
+      return;
+    }
+
+    if (!onAutoCreateByDocumento) {
+      toast.error('Fluxo de auto-cadastro não configurado.');
+      return;
+    }
+
+    setDocumentSubmitting(true);
+    try {
+      const result = await onAutoCreateByDocumento(raw);
+      if (!result?.id) {
+        return;
+      }
+
+      setDocumentModalOpen(false);
+      setDocumentValue('');
+      if (result.message) {
+        toast.success(result.message);
+      }
+
+      await list();
+      await openEditById(result.id);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setDocumentSubmitting(false);
     }
   };
 
@@ -321,6 +386,37 @@ export const CadastroCrudPage = ({
           <option value={30}>30</option>
         </select>
       </div>
+
+      {documentModalOpen ? (
+        <div className="modal-backdrop" onClick={() => setDocumentModalOpen(false)}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <h3>{documentModalTitle}</h3>
+            <form onSubmit={onSubmitDocumentOnly}>
+              <div className="form-grid">
+                <label>
+                  <span>{documentFieldLabel}</span>
+                  <input
+                    type="text"
+                    value={documentValue}
+                    onChange={(event) => setDocumentValue(applyCpfCnpjMask(event.target.value))}
+                    placeholder="Digite CPF ou CNPJ"
+                    required
+                    autoFocus
+                  />
+                </label>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-muted" onClick={() => setDocumentModalOpen(false)} disabled={documentSubmitting}>
+                  Fechar
+                </button>
+                <button type="submit" className="btn-main" disabled={documentSubmitting}>
+                  {documentSubmitting ? 'Processando...' : 'Avançar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       {modalOpen ? (
         <div className="modal-backdrop" onClick={() => setModalOpen(false)}>

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../../shared/api/http';
 import { DataTable } from '../../../shared/ui/DataTable';
 import type { Column } from '../../../shared/ui/DataTable';
 import { PageFrame } from '../../../shared/ui/PageFrame';
-import { formatCpfCnpj, readPagedResponse } from '../cadastroCommon';
+import { applyCpfCnpjMask, formatCpfCnpj, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../cadastroCommon';
 import '../cadastro.css';
 
 type AdministradoraRow = {
@@ -43,6 +44,9 @@ export const AdministradorasPage = () => {
   const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [documentModalOpen, setDocumentModalOpen] = useState(false);
+  const [documento, setDocumento] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -87,11 +91,42 @@ export const AdministradorasPage = () => {
     }
   };
 
+  const createByDocumento = async (event: FormEvent) => {
+    event.preventDefault();
+    const doc = sanitizeDocument(documento);
+    if (!isValidCpfCnpj(doc)) {
+      toast.error('Informe um CPF/CNPJ válido.');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const response = await http.post('/cadastros/administradoras/auto-cadastro', { documento: doc });
+      const data = response.data as Record<string, unknown>;
+      const id = String(data.id ?? data.Id ?? '');
+      if (!id) {
+        toast.error('Não foi possível criar a administradora.');
+        return;
+      }
+
+      const message = String(data.mensagem ?? data.Mensagem ?? '');
+      if (message) toast.success(message);
+      setDocumentModalOpen(false);
+      setDocumento('');
+      await load();
+      navigate(`/cadastro/administradoras/${id}`);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <PageFrame
       title="Cadastro de Administradoras"
       subtitle="Fluxo completo em página cheia, com abas e vínculo em Pessoa."
-      actions={<button className="btn-main" onClick={() => navigate('/cadastro/administradoras/novo')}>Nova administradora</button>}
+      actions={<button className="btn-main" onClick={() => setDocumentModalOpen(true)}>Nova administradora</button>}
     >
       <div className="toolbar">
         <input
@@ -145,6 +180,36 @@ export const AdministradorasPage = () => {
           <option value={30}>30</option>
         </select>
       </div>
+
+      {documentModalOpen ? (
+        <div className="modal-backdrop" onClick={() => setDocumentModalOpen(false)}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <h3>Nova Administradora</h3>
+            <form onSubmit={createByDocumento}>
+              <div className="form-grid">
+                <label>
+                  <span>CPF/CNPJ</span>
+                  <input
+                    value={documento}
+                    onChange={(event) => setDocumento(applyCpfCnpjMask(event.target.value))}
+                    placeholder="Digite o CPF ou CNPJ"
+                    required
+                    autoFocus
+                  />
+                </label>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-muted" onClick={() => setDocumentModalOpen(false)} disabled={creating}>
+                  Fechar
+                </button>
+                <button type="submit" className="btn-main" disabled={creating}>
+                  {creating ? 'Processando...' : 'Avançar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </PageFrame>
   );
 };

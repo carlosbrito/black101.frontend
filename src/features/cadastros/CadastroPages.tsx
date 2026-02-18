@@ -3,7 +3,9 @@ export { RepresentantesPage } from './representantes/RepresentantesListPage';
 export { AgentesPage } from './agentes/AgentesListPage';
 export { BancosPage } from './bancos/BancosListPage';
 export { CedentesPage } from './cedentes/CedentesListPage';
+export { SacadosPage } from './sacados/SacadosListPage';
 export { BancarizadoresPage } from './bancarizadores/BancarizadoresPage';
+export { TestemunhasPage } from './testemunhas/TestemunhasListPage';
 export {
   ConsultorasPage,
   CustodiantePage,
@@ -14,6 +16,7 @@ export {
   CredenciadorasPage,
   ProdutosPage,
   EmitentesPage,
+  EmpresasPage,
   WhiteListPage,
   BlackListPage,
   PrestadoresPage,
@@ -22,6 +25,4 @@ export {
   EsteiraCreditoPage,
   IndicesDebenturePage,
   InvestidoresPage,
-  SacadosPage,
-  TestemunhasPage,
 } from './BasicosPages';

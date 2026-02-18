@@ -6,29 +6,38 @@ import { getErrorMessage, http } from '../../../shared/api/http';
 import { DataTable } from '../../../shared/ui/DataTable';
 import type { Column } from '../../../shared/ui/DataTable';
 import { PageFrame } from '../../../shared/ui/PageFrame';
-import { applyCpfCnpjMask, formatCpfCnpj, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../cadastroCommon';
+import { applyCpfCnpjMask, formatCpfCnpj, formatPhone, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../cadastroCommon';
 import '../cadastro.css';
 
-type CedenteRow = {
+type SacadoRow = {
   id: string;
   pessoaId: string;
   nome: string;
-  cnpjCpf: string;
-  status: string;
+  documento: string;
+  email?: string | null;
+  telefone?: string | null;
   cidade?: string | null;
   uf?: string | null;
   ativo: boolean;
 };
 
-const columns: Column<CedenteRow>[] = [
+type AutoCreateResult = {
+  sacadoId?: string;
+  SacadoId?: string;
+  mensagem?: string;
+  Mensagem?: string;
+};
+
+const columns: Column<SacadoRow>[] = [
   { key: 'nome', label: 'Nome' },
-  { key: 'cnpjCpf', label: 'CPF/CNPJ', render: (row) => formatCpfCnpj(row.cnpjCpf) },
-  { key: 'status', label: 'Status' },
+  { key: 'documento', label: 'CPF/CNPJ', render: (row) => formatCpfCnpj(row.documento) },
+  { key: 'email', label: 'E-mail' },
+  { key: 'telefone', label: 'Telefone', render: (row) => formatPhone(row.telefone ?? '') },
   { key: 'cidade', label: 'Cidade' },
   { key: 'uf', label: 'UF' },
   {
     key: 'ativo',
-    label: 'Situação',
+    label: 'Status',
     render: (row) => (
       <span style={{ color: row.ativo ? 'var(--ok)' : 'var(--danger)', fontWeight: 700 }}>
         {row.ativo ? 'Ativo' : 'Inativo'}
@@ -37,24 +46,25 @@ const columns: Column<CedenteRow>[] = [
   },
 ];
 
-export const CedentesPage = () => {
+export const SacadosPage = () => {
   const navigate = useNavigate();
-  const [rows, setRows] = useState<CedenteRow[]>([]);
+  const [rows, setRows] = useState<SacadoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+
   const [documentModalOpen, setDocumentModalOpen] = useState(false);
-  const [documento, setDocumento] = useState('');
+  const [documentValue, setDocumentValue] = useState('');
   const [creating, setCreating] = useState(false);
 
   const load = async () => {
     setLoading(true);
 
     try {
-      const response = await http.get('/cadastros/cedentes', {
+      const response = await http.get('/cadastros/sacados', {
         params: {
           page,
           pageSize,
@@ -62,7 +72,7 @@ export const CedentesPage = () => {
         },
       });
 
-      const paged = readPagedResponse<CedenteRow>(response.data);
+      const paged = readPagedResponse<SacadoRow>(response.data);
       setRows(paged.items);
       setTotalItems(paged.totalItems);
       setTotalPages(paged.totalPages);
@@ -79,44 +89,43 @@ export const CedentesPage = () => {
 
   const pagesLabel = useMemo(() => `${page} de ${totalPages}`, [page, totalPages]);
 
-  const removeCedente = async (row: CedenteRow) => {
-    if (!window.confirm(`Excluir cedente '${row.nome}'?`)) {
+  const removeSacado = async (row: SacadoRow) => {
+    if (!window.confirm(`Excluir sacado '${row.nome}'?`)) {
       return;
     }
 
     try {
-      await http.delete(`/cadastros/cedentes/${row.id}`);
-      toast.success('Cedente removido.');
+      await http.delete(`/cadastros/sacados/${row.id}`);
+      toast.success('Sacado removido.');
       await load();
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
   };
 
-  const createByDocumento = async (event: FormEvent) => {
+  const onSubmitAutoCadastro = async (event: FormEvent) => {
     event.preventDefault();
-    const doc = sanitizeDocument(documento);
-    if (!isValidCpfCnpj(doc)) {
+
+    const documento = sanitizeDocument(documentValue);
+    if (!isValidCpfCnpj(documento)) {
       toast.error('Informe um CPF/CNPJ válido.');
       return;
     }
 
     setCreating(true);
     try {
-      const response = await http.post('/cadastros/cedentes/auto-cadastro', { documento: doc });
-      const data = response.data as Record<string, unknown>;
-      const id = String(data.cedenteId ?? data.CedenteId ?? '');
+      const response = await http.post('/cadastros/sacados/auto-cadastro', { documento });
+      const data = response.data as AutoCreateResult;
+      const id = data.sacadoId ?? data.SacadoId;
       if (!id) {
-        toast.error('Não foi possível criar o cedente.');
+        toast.error('Não foi possível criar o sacado.');
         return;
       }
 
-      const message = String(data.mensagem ?? data.Mensagem ?? '');
-      if (message) toast.success(message);
       setDocumentModalOpen(false);
-      setDocumento('');
-      await load();
-      navigate(`/cadastro/cedentes/${id}`);
+      setDocumentValue('');
+      toast.success(data.mensagem ?? data.Mensagem ?? 'Sacado criado com sucesso.');
+      navigate(`/cadastro/sacados/${id}`);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -126,13 +135,13 @@ export const CedentesPage = () => {
 
   return (
     <PageFrame
-      title="Cadastro de Cedentes"
-      subtitle="Módulo completo com abas equivalentes ao legado."
-      actions={<button className="btn-main" onClick={() => setDocumentModalOpen(true)}>Novo cedente</button>}
+      title="Cadastro de Sacados"
+      subtitle="Auto-cadastro por CPF/CNPJ e edição completa em tela cheia com abas."
+      actions={<button className="btn-main" onClick={() => setDocumentModalOpen(true)}>Novo sacado</button>}
     >
       <div className="toolbar">
         <input
-          placeholder="Buscar por nome, CPF/CNPJ, e-mail"
+          placeholder="Buscar por nome, CPF/CNPJ ou e-mail"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           onKeyDown={(event) => {
@@ -158,9 +167,9 @@ export const CedentesPage = () => {
         columns={columns}
         rows={rows}
         loading={loading}
-        onDelete={removeCedente}
-        onEdit={(row) => navigate(`/cadastro/cedentes/${row.id}`)}
-        onDetails={(row) => navigate(`/cadastro/cedentes/${row.id}`)}
+        onDelete={removeSacado}
+        onEdit={(row) => navigate(`/cadastro/sacados/${row.id}`)}
+        onDetails={(row) => navigate(`/cadastro/sacados/${row.id}`)}
       />
 
       <div className="pager">
@@ -186,17 +195,18 @@ export const CedentesPage = () => {
       {documentModalOpen ? (
         <div className="modal-backdrop" onClick={() => setDocumentModalOpen(false)}>
           <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <h3>Novo Cedente</h3>
-            <form onSubmit={createByDocumento}>
+            <h3>Novo Sacado</h3>
+            <form onSubmit={onSubmitAutoCadastro}>
               <div className="form-grid">
                 <label>
                   <span>CPF/CNPJ</span>
                   <input
-                    value={documento}
-                    onChange={(event) => setDocumento(applyCpfCnpjMask(event.target.value))}
-                    placeholder="Digite o CPF ou CNPJ"
-                    required
+                    type="text"
+                    value={documentValue}
+                    onChange={(event) => setDocumentValue(applyCpfCnpjMask(event.target.value))}
+                    placeholder="Digite CPF ou CNPJ"
                     autoFocus
+                    required
                   />
                 </label>
               </div>

@@ -6,29 +6,27 @@ import { getErrorMessage, http } from '../../../shared/api/http';
 import { DataTable } from '../../../shared/ui/DataTable';
 import type { Column } from '../../../shared/ui/DataTable';
 import { PageFrame } from '../../../shared/ui/PageFrame';
-import { applyCpfCnpjMask, formatCpfCnpj, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../cadastroCommon';
+import { applyCpfCnpjMask, formatCpfCnpj, formatPhone, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../cadastroCommon';
 import '../cadastro.css';
 
-type CedenteRow = {
+type TestemunhaRow = {
   id: string;
   pessoaId: string;
   nome: string;
-  cnpjCpf: string;
-  status: string;
-  cidade?: string | null;
-  uf?: string | null;
+  documento: string;
+  email?: string | null;
+  telefone?: string | null;
   ativo: boolean;
 };
 
-const columns: Column<CedenteRow>[] = [
+const columns: Column<TestemunhaRow>[] = [
   { key: 'nome', label: 'Nome' },
-  { key: 'cnpjCpf', label: 'CPF/CNPJ', render: (row) => formatCpfCnpj(row.cnpjCpf) },
-  { key: 'status', label: 'Status' },
-  { key: 'cidade', label: 'Cidade' },
-  { key: 'uf', label: 'UF' },
+  { key: 'documento', label: 'CPF/CNPJ', render: (row) => formatCpfCnpj(row.documento) },
+  { key: 'email', label: 'E-mail' },
+  { key: 'telefone', label: 'Telefone', render: (row) => formatPhone(row.telefone ?? '') },
   {
     key: 'ativo',
-    label: 'Situação',
+    label: 'Status',
     render: (row) => (
       <span style={{ color: row.ativo ? 'var(--ok)' : 'var(--danger)', fontWeight: 700 }}>
         {row.ativo ? 'Ativo' : 'Inativo'}
@@ -37,9 +35,9 @@ const columns: Column<CedenteRow>[] = [
   },
 ];
 
-export const CedentesPage = () => {
+export const TestemunhasPage = () => {
   const navigate = useNavigate();
-  const [rows, setRows] = useState<CedenteRow[]>([]);
+  const [rows, setRows] = useState<TestemunhaRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -54,7 +52,7 @@ export const CedentesPage = () => {
     setLoading(true);
 
     try {
-      const response = await http.get('/cadastros/cedentes', {
+      const response = await http.get('/cadastros/testemunhas', {
         params: {
           page,
           pageSize,
@@ -62,7 +60,7 @@ export const CedentesPage = () => {
         },
       });
 
-      const paged = readPagedResponse<CedenteRow>(response.data);
+      const paged = readPagedResponse<TestemunhaRow>(response.data);
       setRows(paged.items);
       setTotalItems(paged.totalItems);
       setTotalPages(paged.totalPages);
@@ -79,14 +77,14 @@ export const CedentesPage = () => {
 
   const pagesLabel = useMemo(() => `${page} de ${totalPages}`, [page, totalPages]);
 
-  const removeCedente = async (row: CedenteRow) => {
-    if (!window.confirm(`Excluir cedente '${row.nome}'?`)) {
+  const removeTestemunha = async (row: TestemunhaRow) => {
+    if (!window.confirm(`Excluir testemunha '${row.nome}'?`)) {
       return;
     }
 
     try {
-      await http.delete(`/cadastros/cedentes/${row.id}`);
-      toast.success('Cedente removido.');
+      await http.delete(`/cadastros/testemunhas/${row.id}`);
+      toast.success('Testemunha removida.');
       await load();
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -103,11 +101,11 @@ export const CedentesPage = () => {
 
     setCreating(true);
     try {
-      const response = await http.post('/cadastros/cedentes/auto-cadastro', { documento: doc });
+      const response = await http.post('/cadastros/testemunhas/auto-cadastro', { documento: doc });
       const data = response.data as Record<string, unknown>;
-      const id = String(data.cedenteId ?? data.CedenteId ?? '');
+      const id = String(data.testemunhaId ?? data.TestemunhaId ?? '');
       if (!id) {
-        toast.error('Não foi possível criar o cedente.');
+        toast.error('Não foi possível criar a testemunha.');
         return;
       }
 
@@ -116,7 +114,7 @@ export const CedentesPage = () => {
       setDocumentModalOpen(false);
       setDocumento('');
       await load();
-      navigate(`/cadastro/cedentes/${id}`);
+      navigate(`/cadastro/testemunhas/${id}`);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -126,13 +124,13 @@ export const CedentesPage = () => {
 
   return (
     <PageFrame
-      title="Cadastro de Cedentes"
-      subtitle="Módulo completo com abas equivalentes ao legado."
-      actions={<button className="btn-main" onClick={() => setDocumentModalOpen(true)}>Novo cedente</button>}
+      title="Cadastro de Testemunhas"
+      subtitle="Cadastro em tela cheia com auto-cadastro por CPF/CNPJ."
+      actions={<button className="btn-main" onClick={() => setDocumentModalOpen(true)}>Nova testemunha</button>}
     >
       <div className="toolbar">
         <input
-          placeholder="Buscar por nome, CPF/CNPJ, e-mail"
+          placeholder="Buscar por nome, CPF/CNPJ ou e-mail"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           onKeyDown={(event) => {
@@ -158,9 +156,9 @@ export const CedentesPage = () => {
         columns={columns}
         rows={rows}
         loading={loading}
-        onDelete={removeCedente}
-        onEdit={(row) => navigate(`/cadastro/cedentes/${row.id}`)}
-        onDetails={(row) => navigate(`/cadastro/cedentes/${row.id}`)}
+        onDelete={removeTestemunha}
+        onEdit={(row) => navigate(`/cadastro/testemunhas/${row.id}`)}
+        onDetails={(row) => navigate(`/cadastro/testemunhas/${row.id}`)}
       />
 
       <div className="pager">
@@ -186,7 +184,7 @@ export const CedentesPage = () => {
       {documentModalOpen ? (
         <div className="modal-backdrop" onClick={() => setDocumentModalOpen(false)}>
           <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <h3>Novo Cedente</h3>
+            <h3>Nova Testemunha</h3>
             <form onSubmit={createByDocumento}>
               <div className="form-grid">
                 <label>
