@@ -36,8 +36,7 @@
   text-transform: uppercase;
 }
 
-.table-wrap th:last-child,
-.table-wrap td:last-child {
+.table-wrap .actions-col {
   text-align: right;
 }
 

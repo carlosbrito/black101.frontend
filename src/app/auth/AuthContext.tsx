@@ -1,6 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ensureCsrfToken, getErrorMessage, http } from '../../shared/api/http';
-import { SegmentoEmpresa, type AuthMeResponse, type AuthUser } from '../../shared/types/auth';
+import {
+  SegmentoEmpresa,
+  type AuthMeResponse,
+  type AuthUser,
+  type EmpresaContextItem,
+} from '../../shared/types/auth';
 
 type AuthContextValue = {
   isAuthenticated: boolean;
@@ -10,9 +15,12 @@ type AuthContextValue = {
   claims: string[];
   segmentoEmpresa: SegmentoEmpresa;
   isSecuritizadora: boolean;
+  contextEmpresas: EmpresaContextItem[];
+  selectedEmpresaIds: string[];
   login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
+  updateContextSelection: (empresaIds: string[]) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -23,12 +31,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [roles, setRoles] = useState<string[]>([]);
   const [claims, setClaims] = useState<string[]>([]);
   const [segmentoEmpresa, setSegmentoEmpresa] = useState<SegmentoEmpresa>(SegmentoEmpresa.Fidc);
+  const [contextEmpresas, setContextEmpresas] = useState<EmpresaContextItem[]>([]);
+  const [selectedEmpresaIds, setSelectedEmpresaIds] = useState<string[]>([]);
 
   const resetAuth = useCallback(() => {
     setUser(null);
     setRoles([]);
     setClaims([]);
     setSegmentoEmpresa(SegmentoEmpresa.Fidc);
+    setContextEmpresas([]);
+    setSelectedEmpresaIds([]);
   }, []);
 
   const refreshMe = useCallback(async () => {
@@ -38,6 +50,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setRoles(response.data.roles);
       setClaims(response.data.claims);
       setSegmentoEmpresa(response.data.segmentoEmpresa ?? SegmentoEmpresa.Fidc);
+      setContextEmpresas(response.data.contextoEmpresas?.empresasDisponiveis ?? []);
+      setSelectedEmpresaIds(response.data.contextoEmpresas?.empresasSelecionadasIds ?? []);
     } catch {
       resetAuth();
     }
@@ -60,6 +74,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [resetAuth]);
 
+  const updateContextSelection = useCallback(async (empresaIds: string[]) => {
+    await ensureCsrfToken();
+    await http.put('/contexto/empresas/selecao', { empresaIds });
+    await refreshMe();
+  }, [refreshMe]);
+
   useEffect(() => {
     const bootstrap = async () => {
       setLoading(true);
@@ -79,10 +99,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     claims,
     segmentoEmpresa,
     isSecuritizadora: segmentoEmpresa === SegmentoEmpresa.Securitizadora,
+    contextEmpresas,
+    selectedEmpresaIds,
     login,
     logout,
     refreshMe,
-  }), [claims, loading, login, logout, refreshMe, roles, segmentoEmpresa, user]);
+    updateContextSelection,
+  }), [
+    claims,
+    contextEmpresas,
+    loading,
+    login,
+    logout,
+    refreshMe,
+    roles,
+    segmentoEmpresa,
+    selectedEmpresaIds,
+    updateContextSelection,
+    user,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { getErrorMessage, http } from '../../../shared/api/http';
+import { useAuth } from '../../../app/auth/AuthContext';
+import { CONTEXTO_EMPRESA_HEADER, getErrorMessage, http, requiresEmpresaChoice } from '../../../shared/api/http';
 import { DataTable } from '../../../shared/ui/DataTable';
 import type { Column } from '../../../shared/ui/DataTable';
+import { EmpresaPickerDialog } from '../../../shared/ui/EmpresaPickerDialog';
 import { PageFrame } from '../../../shared/ui/PageFrame';
 import { applyCpfCnpjMask, formatCpfCnpj, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../cadastroCommon';
 import '../cadastro.css';
@@ -38,6 +40,7 @@ const columns: Column<CedenteRow>[] = [
 ];
 
 export const CedentesPage = () => {
+  const { contextEmpresas, selectedEmpresaIds } = useAuth();
   const navigate = useNavigate();
   const [rows, setRows] = useState<CedenteRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +52,8 @@ export const CedentesPage = () => {
   const [documentModalOpen, setDocumentModalOpen] = useState(false);
   const [documento, setDocumento] = useState('');
   const [creating, setCreating] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerCallback, setPickerCallback] = useState<((empresaId: string) => Promise<void>) | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -102,20 +107,48 @@ export const CedentesPage = () => {
 
     setCreating(true);
     try {
-      const response = await http.post('/cadastros/cedentes/auto-cadastro', { documento: doc });
-      const data = response.data as Record<string, unknown>;
-      const id = String(data.cedenteId ?? data.CedenteId ?? '');
-      if (!id) {
-        toast.error('Não foi possível criar o cedente.');
-        return;
-      }
+      const send = async (empresaId?: string) => {
+        const response = await http.post('/cadastros/cedentes/auto-cadastro', { documento: doc }, {
+          headers: empresaId ? { [CONTEXTO_EMPRESA_HEADER]: empresaId } : undefined,
+        });
+        return response.data as Record<string, unknown>;
+      };
 
-      const message = String(data.mensagem ?? data.Mensagem ?? '');
-      if (message) toast.success(message);
-      setDocumentModalOpen(false);
-      setDocumento('');
-      await load();
-      navigate(`/cadastro/cedentes/${id}`);
+      try {
+        const data = await send();
+        const id = String(data.cedenteId ?? data.CedenteId ?? '');
+        if (!id) {
+          toast.error('Não foi possível criar o cedente.');
+          return;
+        }
+
+        const message = String(data.mensagem ?? data.Mensagem ?? '');
+        if (message) toast.success(message);
+        setDocumentModalOpen(false);
+        setDocumento('');
+        await load();
+        navigate(`/cadastro/cedentes/${id}`);
+      } catch (error) {
+        if (!requiresEmpresaChoice(error) || selectedEmpresaIds.length <= 1) {
+          throw error;
+        }
+
+        setPickerOpen(true);
+        setPickerCallback(() => async (empresaId: string) => {
+          const data = await send(empresaId);
+          const id = String(data.cedenteId ?? data.CedenteId ?? '');
+          if (!id) {
+            throw new Error('Não foi possível criar o cedente.');
+          }
+
+          const message = String(data.mensagem ?? data.Mensagem ?? '');
+          if (message) toast.success(message);
+          setDocumentModalOpen(false);
+          setDocumento('');
+          await load();
+          navigate(`/cadastro/cedentes/${id}`);
+        });
+      }
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -211,6 +244,26 @@ export const CedentesPage = () => {
           </div>
         </div>
       ) : null}
+      <EmpresaPickerDialog
+        open={pickerOpen}
+        options={contextEmpresas.filter((item) => selectedEmpresaIds.includes(item.id)).map((item) => ({ id: item.id, nome: item.nome }))}
+        onClose={() => {
+          setPickerOpen(false);
+          setPickerCallback(null);
+        }}
+        onConfirm={(empresaId) => {
+          const callback = pickerCallback;
+          setPickerOpen(false);
+          setPickerCallback(null);
+          if (!callback) {
+            return;
+          }
+
+          void callback(empresaId).catch((error) => {
+            toast.error(getErrorMessage(error));
+          });
+        }}
+      />
     </PageFrame>
   );
 };

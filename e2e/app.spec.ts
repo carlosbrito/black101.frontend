@@ -16,6 +16,7 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
   const people = new Map<string, RecordItem>();
 
   const seededPersonId = createId();
+  const seededCedenteId = createId();
   people.set(seededPersonId, {
     id: seededPersonId,
     nome: 'Representante Seed',
@@ -38,7 +39,16 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     adm: [] as RecordItem[],
     age: [] as RecordItem[],
     ban: [] as RecordItem[],
-    ced: [] as RecordItem[],
+    ced: [{
+      id: seededCedenteId,
+      pessoaId: seededPersonId,
+      nome: 'Cedente Seed',
+      cnpjCpf: '12345678000199',
+      cidade: 'Sao Paulo',
+      uf: 'SP',
+      ativo: true,
+      status: 'ABERTO',
+    }],
     rep: [{
       id: createId(),
       pessoaId: seededPersonId,
@@ -47,6 +57,35 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
       email: 'rep@seed.local',
       telefone: '11999999999',
       ativo: true,
+    }],
+    operacoes: [{
+      id: createId(),
+      numero: 'OP-SEED-1',
+      descricao: 'Operacao Seed',
+      valor: 1000,
+      dataOperacao: '2026-02-18T10:00:00Z',
+      status: 'Aberta',
+    }],
+    importacoes: [{
+      id: createId(),
+      fidcId: '00000000-0000-0000-0000-000000000001',
+      origem: 'CNAB',
+      tipoArquivo: 'CNAB',
+      modalidade: 'DUPLICATA',
+      cedenteId: seededCedenteId,
+      fileName: 'falha-seed.rem',
+      fileHash: 'abc123',
+      status: 'FINALIZADO_FALHA',
+      errorSummary: 'Falha de validação de linhas.',
+      ultimoCodigoFalha: 'CNAB_SEM_LINHAS_VALIDAS',
+      tentativas: 1,
+      createdAt: '2026-02-18T08:00:00Z',
+      completedAt: '2026-02-18T08:01:00Z',
+      userEmail: 'admin@black101.local',
+      eventos: [
+        { id: createId(), status: 'PROCESSANDO', message: 'Arquivo recebido.', createdAt: '2026-02-18T08:00:00Z' },
+        { id: createId(), status: 'FINALIZADO_FALHA', message: 'Falha de validação de linhas.', createdAt: '2026-02-18T08:01:00Z' },
+      ],
     }],
   };
   const cedenteTabs = new Map<string, Record<string, RecordItem | RecordItem[]>>();
@@ -73,6 +112,10 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     cedenteTabs.set(cedenteId, created);
     return created;
   };
+  ensureCedenteTabs(seededCedenteId).parametrizacao = [
+    { id: createId(), cedenteId: seededCedenteId, modalidade: 'DUPLICATA' },
+    { id: createId(), cedenteId: seededCedenteId, modalidade: 'CCB' },
+  ];
 
   await page.route('**/auth/csrf', async (route) => {
     await route.fulfill({
@@ -250,6 +293,18 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
         contentType: 'application/json',
         body: JSON.stringify({ cedenteId: id, pessoaId: person.id, status: 'created', mensagem: 'Cedente criado.' }),
       });
+      return;
+    }
+
+    if (path === '/cadastros/cedentes/ativos' && method === 'GET') {
+      const ativos = state.ced
+        .filter((item) => item.ativo !== false)
+        .map((item) => ({
+          id: item.id,
+          nome: item.nome,
+          cnpjCpf: item.cnpjCpf,
+        }));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ativos) });
       return;
     }
 
@@ -571,6 +626,151 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
 
     await route.fallback();
   });
+
+  await page.route('**/operacoes/**', async (route) => {
+    if (!['xhr', 'fetch'].includes(route.request().resourceType())) {
+      await route.fallback();
+      return;
+    }
+
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    const path = url.pathname;
+
+    if (path === '/operacoes' && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(createPaged(state.operacoes)) });
+      return;
+    }
+
+    if (path === '/operacoes' && method === 'POST') {
+      const body = route.request().postDataJSON() as RecordItem;
+      const id = createId();
+      state.operacoes.push({ id, ...body });
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ id }) });
+      return;
+    }
+
+    if (path.startsWith('/operacoes/') && method === 'PUT') {
+      const id = path.split('/')[2] ?? '';
+      const body = route.request().postDataJSON() as RecordItem;
+      const index = state.operacoes.findIndex((item) => item.id === id);
+      if (index >= 0) {
+        state.operacoes[index] = { ...state.operacoes[index], ...body };
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    if (path.startsWith('/operacoes/') && method === 'DELETE') {
+      const id = path.split('/')[2] ?? '';
+      const index = state.operacoes.findIndex((item) => item.id === id);
+      if (index >= 0) {
+        state.operacoes.splice(index, 1);
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    if (path === '/operacoes/importacoes' && method === 'GET') {
+      const pageParam = Number(url.searchParams.get('page') ?? '1');
+      const pageSizeParam = Number(url.searchParams.get('pageSize') ?? '10');
+      const pageNumber = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+      const pageSizeNumber = Number.isFinite(pageSizeParam) && pageSizeParam > 0 ? pageSizeParam : 10;
+      const start = (pageNumber - 1) * pageSizeNumber;
+      const end = start + pageSizeNumber;
+      const pageItems = state.importacoes
+        .slice(start, end)
+        .map((item) => Object.fromEntries(Object.entries(item).filter(([key]) => key !== 'eventos')));
+      const response = {
+        items: pageItems,
+        page: pageNumber,
+        pageSize: pageSizeNumber,
+        totalItems: state.importacoes.length,
+        totalPages: Math.max(1, Math.ceil(state.importacoes.length / pageSizeNumber)),
+      };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
+      return;
+    }
+
+    if (path === '/operacoes/importacoes' && method === 'POST') {
+      const body = route.request().postData() ?? '';
+      const fileNameMatch = body.match(/filename="([^"]+)"/);
+      const modalidadeMatch = body.match(/name="modalidade"\r\n\r\n([^\r\n]+)/);
+      const cedenteIdMatch = body.match(/name="cedenteId"\r\n\r\n([^\r\n]+)/);
+      const tipoArquivoMatch = body.match(/name="tipoArquivo"\r\n\r\n([^\r\n]+)/);
+      const tipoBancoMatch = body.match(/name="tipoBanco"\r\n\r\n([^\r\n]+)/);
+      const tipoCnabMatch = body.match(/name="tipoCnab"\r\n\r\n([^\r\n]+)/);
+
+      const id = createId();
+      const now = new Date().toISOString();
+      const created = {
+        id,
+        fidcId: '00000000-0000-0000-0000-000000000001',
+        origem: tipoArquivoMatch?.[1] ?? 'CNAB',
+        tipoArquivo: tipoArquivoMatch?.[1] ?? 'CNAB',
+        tipoBanco: tipoBancoMatch?.[1] ?? null,
+        tipoCnab: tipoCnabMatch?.[1] ?? null,
+        modalidade: modalidadeMatch?.[1] ?? null,
+        cedenteId: cedenteIdMatch?.[1] ?? seededCedenteId,
+        fileName: fileNameMatch?.[1] ?? 'arquivo.rem',
+        fileHash: 'mockhash',
+        status: 'PROCESSANDO',
+        errorSummary: null,
+        ultimoCodigoFalha: null,
+        tentativas: 0,
+        ultimaTentativaEm: now,
+        correlationId: createId(),
+        ultimoMessageId: createId(),
+        createdAt: now,
+        completedAt: null,
+        userEmail: 'admin@black101.local',
+        eventos: [{ id: createId(), status: 'PROCESSANDO', message: 'Arquivo recebido e enfileirado.', createdAt: now }],
+      };
+
+      state.importacoes.unshift(created);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ importacaoId: id }) });
+      return;
+    }
+
+    if (/^\/operacoes\/importacoes\/[^/]+$/.test(path) && method === 'GET') {
+      const id = path.split('/')[3] ?? '';
+      const found = state.importacoes.find((item) => item.id === id);
+      if (!found) {
+        await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'Importação não encontrada.' }) });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(found) });
+      return;
+    }
+
+    if (/^\/operacoes\/importacoes\/[^/]+\/reprocessar$/.test(path) && method === 'POST') {
+      const id = path.split('/')[3] ?? '';
+      const found = state.importacoes.find((item) => item.id === id);
+      if (!found) {
+        await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'Importação não encontrada.' }) });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      found.status = 'PROCESSANDO';
+      found.errorSummary = null;
+      found.ultimoCodigoFalha = null;
+      found.tentativas = Number(found.tentativas ?? 0) + 1;
+      found.ultimaTentativaEm = now;
+      found.completedAt = null;
+      found.eventos.push({
+        id: createId(),
+        status: 'REPROCESSAR',
+        message: 'Reprocessamento solicitado manualmente.',
+        createdAt: now,
+      });
+
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    await route.fallback();
+  });
 };
 
 const login = async (
@@ -788,4 +988,33 @@ test('crud cedentes', async ({ page }) => {
   await login(page);
   const suffix = Date.now().toString().slice(-5);
   await runCrudCedentesFull(page, suffix);
+});
+
+test('importacoes: envia arquivo e abre detalhes', async ({ page }) => {
+  await login(page);
+  await page.goto('/operacoes/importacoes');
+
+  await page.locator('select').first().selectOption({ index: 1 });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'lote-teste.rem',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('OP001;Operacao teste;1200.50;2026-02-18'),
+  });
+
+  await page.getByRole('button', { name: 'Enviar para processamento' }).click();
+  await expect(page.getByText('Detalhes da importação')).toBeVisible();
+  await expect(page.locator('.drawer-card .pill').first()).toHaveText('PROCESSANDO');
+});
+
+test('importacoes: reprocessa item com falha', async ({ page }) => {
+  await login(page);
+  await page.goto('/operacoes/importacoes');
+
+  await page.getByRole('button', { name: 'Detalhes' }).first().evaluate((element) => {
+    (element as HTMLButtonElement).click();
+  });
+  await page.locator('.drawer-card').getByRole('button', { name: 'Reprocessar' }).click();
+
+  await expect(page.getByText('Detalhes da importação')).toBeVisible();
+  await expect(page.locator('.drawer-card .pill').first()).toHaveText('PROCESSANDO');
 });

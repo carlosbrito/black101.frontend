@@ -1,8 +1,10 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { getErrorMessage, http } from '../../shared/api/http';
+import { useAuth } from '../../app/auth/AuthContext';
+import { CONTEXTO_EMPRESA_HEADER, getErrorMessage, http, requiresEmpresaChoice } from '../../shared/api/http';
 import { DataTable } from '../../shared/ui/DataTable';
 import type { Column } from '../../shared/ui/DataTable';
+import { EmpresaPickerDialog } from '../../shared/ui/EmpresaPickerDialog';
 import { PageFrame } from '../../shared/ui/PageFrame';
 
 type OperacaoRow = {
@@ -34,11 +36,14 @@ const defaultForm: OperacaoForm = {
 };
 
 export const OperacoesPage = () => {
+  const { contextEmpresas, selectedEmpresaIds } = useAuth();
   const [rows, setRows] = useState<OperacaoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [current, setCurrent] = useState<OperacaoRow | null>(null);
   const [form, setForm] = useState<OperacaoForm>(defaultForm);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerCallback, setPickerCallback] = useState<((empresaId: string) => Promise<void>) | null>(null);
 
   const list = async () => {
     setLoading(true);
@@ -78,13 +83,35 @@ export const OperacoesPage = () => {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (current) {
-        await http.put(`/operacoes/${current.id}`, form);
-        toast.success('Operação atualizada');
-      } else {
-        await http.post('/operacoes', form);
+      const send = async (empresaId?: string) => {
+        if (current) {
+          await http.put(`/operacoes/${current.id}`, form);
+          toast.success('Operação atualizada');
+          return;
+        }
+
+        await http.post('/operacoes', form, {
+          headers: empresaId ? { [CONTEXTO_EMPRESA_HEADER]: empresaId } : undefined,
+        });
         toast.success('Operação criada');
+      };
+
+      try {
+        await send();
+      } catch (error) {
+        if (!current && requiresEmpresaChoice(error) && selectedEmpresaIds.length > 1) {
+          setPickerOpen(true);
+          setPickerCallback(() => async (empresaId: string) => {
+            await send(empresaId);
+            setModalOpen(false);
+            await list();
+          });
+          return;
+        }
+
+        throw error;
       }
+
       setModalOpen(false);
       await list();
     } catch (error) {
@@ -148,6 +175,28 @@ export const OperacoesPage = () => {
           </div>
         </div>
       ) : null}
+      <EmpresaPickerDialog
+        open={pickerOpen}
+        options={contextEmpresas.filter((item) => selectedEmpresaIds.includes(item.id)).map((item) => ({ id: item.id, nome: item.nome }))}
+        onClose={() => {
+          setPickerOpen(false);
+          setPickerCallback(null);
+        }}
+        onConfirm={(empresaId) => {
+          const callback = pickerCallback;
+          setPickerOpen(false);
+          setPickerCallback(null);
+          if (!callback) {
+            return;
+          }
+
+          void callback(empresaId).catch((error) => {
+            toast.error(getErrorMessage(error));
+          });
+        }}
+      />
     </PageFrame>
   );
 };
+
+

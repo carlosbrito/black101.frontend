@@ -4,6 +4,17 @@ export type AuthUser = {
   email: string;
 };
 
+export type EmpresaContextItem = {
+  id: string;
+  nome: string;
+  documento?: string | null;
+};
+
+export type EmpresaContextSnapshot = {
+  empresasDisponiveis: EmpresaContextItem[];
+  empresasSelecionadasIds: string[];
+};
+
 export enum SegmentoEmpresa {
   Fidc = 0,
   Securitizadora = 1,
@@ -16,4 +27,5 @@ export type AuthMeResponse = {
   roles: string[];
   claims: string[];
   segmentoEmpresa: SegmentoEmpresa;
+  contextoEmpresas: EmpresaContextSnapshot;
 };

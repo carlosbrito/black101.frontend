@@ -1,7 +1,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { legacyMenu } from './menuConfig';
 import { useAuth } from '../auth/AuthContext';
+import { getErrorMessage } from '../../shared/api/http';
+import type { MenuGroup } from '../../shared/types/menu';
 import './main-layout.css';
 
 type IconName =
@@ -34,11 +37,6 @@ type IconName =
 type BreadcrumbItem = {
   label: string;
   path?: string;
-};
-
-type FundContext = {
-  id: string;
-  name: string;
 };
 
 type ShortcutItem = {
@@ -105,13 +103,6 @@ const MenuIcon = ({ name }: { name: IconName }) => (
   </svg>
 );
 
-const fundOptions: FundContext[] = [
-  { id: 'sabiacred', name: 'Fundo de Investimentos de Direitos Creditorios Sabia C...' },
-  { id: 'alpha', name: 'Black101 FIDC Alpha' },
-  { id: 'varejo', name: 'Black101 FIDC Varejo' },
-  { id: 'agro', name: 'Black101 FIDC Agro' },
-];
-
 const contextShortcuts: ShortcutItem[] = [
   { label: 'Painel', icon: 'grid', route: '/construcao/atalhos/painel' },
   { label: 'Matriz', icon: 'bar', route: '/construcao/atalhos/matriz' },
@@ -125,12 +116,30 @@ const contextShortcuts: ShortcutItem[] = [
   { label: 'Assistente', icon: 'bot', route: '/construcao/atalhos/assistente', variant: 'muted' },
 ];
 
+const isImplementedRoute = (route: string) => !route.startsWith('/construcao/');
+
+const filterImplementedMenuGroups = (groups: MenuGroup[]): MenuGroup[] =>
+  groups
+    .map((group) => {
+      const childrens = group.childrens.filter((child) => isImplementedRoute(child.route));
+      const complementaryItems = group.complementaryItems
+        ?.map((comp) => ({
+          ...comp,
+          childrens: comp.childrens.filter((child) => isImplementedRoute(child.route)),
+        }))
+        .filter((comp) => comp.childrens.length > 0);
+
+      return { ...group, childrens, complementaryItems };
+    })
+    .filter((group) => group.childrens.length > 0 || (group.complementaryItems?.length ?? 0) > 0);
+
 export const MainLayout = () => {
-  const { isSecuritizadora } = useAuth();
+  const { isSecuritizadora, contextEmpresas, selectedEmpresaIds, updateContextSelection } = useAuth();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [fundPickerOpen, setFundPickerOpen] = useState(false);
-  const [currentFundId, setCurrentFundId] = useState(fundOptions[0].id);
+  const [pendingSelection, setPendingSelection] = useState<string[]>([]);
+  const [savingSelection, setSavingSelection] = useState(false);
   const [panelOffsetByGroup, setPanelOffsetByGroup] = useState<Record<string, number>>({});
   const navRef = useRef<HTMLElement | null>(null);
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -140,8 +149,15 @@ export const MainLayout = () => {
   const location = useLocation();
 
   const menuGroups = useMemo(
-    () => legacyMenu.filter((group) => group.label !== 'Securitizadora' || isSecuritizadora),
+    () =>
+      filterImplementedMenuGroups(legacyMenu).filter(
+        (group) => group.label !== 'Securitizadora' || isSecuritizadora,
+      ),
     [isSecuritizadora],
+  );
+  const visibleContextShortcuts = useMemo(
+    () => contextShortcuts.filter((shortcut) => isImplementedRoute(shortcut.route)),
+    [],
   );
 
   const breadcrumbIndex = useMemo(() => {
@@ -242,14 +258,55 @@ export const MainLayout = () => {
     setMobileOpen(false);
   };
 
-  const currentFund = useMemo(
-    () => fundOptions.find((item) => item.id === currentFundId) ?? fundOptions[0],
-    [currentFundId],
+  const selectedEmpresas = useMemo(
+    () => contextEmpresas.filter((item) => selectedEmpresaIds.includes(item.id)),
+    [contextEmpresas, selectedEmpresaIds],
   );
+
+  const currentFundLabel = useMemo(() => {
+    if (selectedEmpresas.length === 0) {
+      return 'Sem empresa de contexto';
+    }
+
+    if (selectedEmpresas.length === 1) {
+      return selectedEmpresas[0].nome;
+    }
+
+    return `${selectedEmpresas.length} empresas selecionadas`;
+  }, [selectedEmpresas]);
 
   const canUseHoverMenus = () => (
     window.innerWidth > 1024 && window.matchMedia('(hover: hover) and (pointer: fine)').matches
   );
+
+  const openContextPicker = () => {
+    setPendingSelection(selectedEmpresaIds);
+    setFundPickerOpen(true);
+  };
+
+  const togglePendingEmpresa = (empresaId: string) => {
+    setPendingSelection((current) =>
+      current.includes(empresaId)
+        ? current.filter((id) => id !== empresaId)
+        : [...current, empresaId],
+    );
+  };
+
+  const saveContextSelection = async () => {
+    if (pendingSelection.length === 0) {
+      return;
+    }
+
+    setSavingSelection(true);
+    try {
+      await updateContextSelection(pendingSelection);
+      setFundPickerOpen(false);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setSavingSelection(false);
+    }
+  };
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -457,46 +514,54 @@ export const MainLayout = () => {
           <button
             type="button"
             className="fund-chip"
-            onClick={() => setFundPickerOpen((value) => !value)}
+            onClick={openContextPicker}
             aria-expanded={fundPickerOpen}
             aria-haspopup="listbox"
           >
             <span className="fund-chip-icon">
               <MenuIcon name="bank" />
             </span>
-            <span className="fund-chip-label">{currentFund.name}</span>
+            <span className="fund-chip-label">{currentFundLabel}</span>
           </button>
-          <button type="button" className="fund-edit-btn" onClick={() => setFundPickerOpen((value) => !value)}>
+          <button type="button" className="fund-edit-btn" onClick={openContextPicker}>
             <MenuIcon name="pencil" />
             <span>Editar</span>
           </button>
 
           {fundPickerOpen ? (
             <div className="fund-picker" role="dialog" aria-label="Selecionar fundo de contexto">
-              <h4>Selecione o fundo de contexto</h4>
+              <h4>Selecione as empresas de contexto</h4>
               <ul role="listbox" aria-label="Fundos disponíveis">
-                {fundOptions.map((fund) => (
+                {contextEmpresas.map((fund) => (
                   <li key={fund.id}>
                     <button
                       type="button"
-                      className={fund.id === currentFundId ? 'is-selected' : ''}
-                      onClick={() => {
-                        setCurrentFundId(fund.id);
-                        setFundPickerOpen(false);
-                      }}
+                      className={pendingSelection.includes(fund.id) ? 'is-selected' : ''}
+                      onClick={() => togglePendingEmpresa(fund.id)}
                     >
-                      {fund.name}
+                      {fund.nome}
                     </button>
                   </li>
                 ))}
               </ul>
+              <div className="modal-actions">
+                <button type="button" className="btn-muted" onClick={() => setFundPickerOpen(false)}>Cancelar</button>
+                <button
+                  type="button"
+                  className="btn-main"
+                  disabled={pendingSelection.length === 0 || savingSelection}
+                  onClick={() => void saveContextSelection()}
+                >
+                  {savingSelection ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
             </div>
           ) : null}
         </div>
 
         <div className="context-shortcuts" aria-label="Atalhos rápidos">
           <div className="context-shortcuts-toolbar">
-            {contextShortcuts.map((shortcut) => (
+            {visibleContextShortcuts.map((shortcut) => (
               <Fragment key={shortcut.label}>
                 {shortcut.dividerBefore ? <span className="shortcut-divider" aria-hidden="true" /> : null}
                 <Link

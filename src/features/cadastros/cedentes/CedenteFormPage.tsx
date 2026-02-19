@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { getErrorMessage, http } from '../../../shared/api/http';
+import { useAuth } from '../../../app/auth/AuthContext';
+import { CONTEXTO_EMPRESA_HEADER, getErrorMessage, http, requiresEmpresaChoice } from '../../../shared/api/http';
+import { EmpresaPickerDialog } from '../../../shared/ui/EmpresaPickerDialog';
 import { PageFrame } from '../../../shared/ui/PageFrame';
 import type { PagedResponse } from '../../../shared/types/paging';
 import {
@@ -286,6 +288,7 @@ const createQsaForm = () => ({
 });
 
 export const CedenteFormPage = () => {
+  const { contextEmpresas, selectedEmpresaIds } = useAuth();
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const cedenteId = params.id;
@@ -293,6 +296,8 @@ export const CedenteFormPage = () => {
 
   const [loading, setLoading] = useState<boolean>(isEdit);
   const [saving, setSaving] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerCallback, setPickerCallback] = useState<((empresaId: string) => Promise<void>) | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('cedente');
 
   const [pessoaId, setPessoaId] = useState<string | null>(null);
@@ -789,22 +794,39 @@ export const CedenteFormPage = () => {
 
         toast.success('Cedente atualizado.');
       } else {
-        const createResponse = await http.post('/cadastros/cedentes', {
-          pessoaId: resolvedPessoaId,
-        });
-
-        const created = createResponse.data as { id: string };
-
-        if (!cedenteAtivo || (cedenteStatus.trim() && cedenteStatus.trim() !== 'Aberto')) {
-          await http.put(`/cadastros/cedentes/${created.id}`, {
+        const createCedente = async (empresaId?: string) => {
+          const createResponse = await http.post('/cadastros/cedentes', {
             pessoaId: resolvedPessoaId,
-            ativo: cedenteAtivo,
-            status: cedenteStatus.trim() || 'Aberto',
+          }, {
+            headers: empresaId ? { [CONTEXTO_EMPRESA_HEADER]: empresaId } : undefined,
+          });
+
+          const created = createResponse.data as { id: string };
+
+          if (!cedenteAtivo || (cedenteStatus.trim() && cedenteStatus.trim() !== 'Aberto')) {
+            await http.put(`/cadastros/cedentes/${created.id}`, {
+              pessoaId: resolvedPessoaId,
+              ativo: cedenteAtivo,
+              status: cedenteStatus.trim() || 'Aberto',
+            });
+          }
+
+          toast.success('Cedente criado.');
+          navigate(`/cadastro/cedentes/${created.id}`, { replace: true });
+        };
+
+        try {
+          await createCedente();
+        } catch (error) {
+          if (!requiresEmpresaChoice(error) || selectedEmpresaIds.length <= 1) {
+            throw error;
+          }
+
+          setPickerOpen(true);
+          setPickerCallback(() => async (empresaId: string) => {
+            await createCedente(empresaId);
           });
         }
-
-        toast.success('Cedente criado.');
-        navigate(`/cadastro/cedentes/${created.id}`, { replace: true });
       }
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -2493,6 +2515,26 @@ export const CedenteFormPage = () => {
       </div>
 
       {loading ? <div className="entity-loading">Carregando cadastro...</div> : renderCurrentTab()}
+      <EmpresaPickerDialog
+        open={pickerOpen}
+        options={contextEmpresas.filter((item) => selectedEmpresaIds.includes(item.id)).map((item) => ({ id: item.id, nome: item.nome }))}
+        onClose={() => {
+          setPickerOpen(false);
+          setPickerCallback(null);
+        }}
+        onConfirm={(empresaId) => {
+          const callback = pickerCallback;
+          setPickerOpen(false);
+          setPickerCallback(null);
+          if (!callback) {
+            return;
+          }
+
+          void callback(empresaId).catch((error) => {
+            toast.error(getErrorMessage(error));
+          });
+        }}
+      />
     </PageFrame>
   );
 };

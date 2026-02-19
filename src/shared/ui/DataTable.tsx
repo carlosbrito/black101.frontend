@@ -17,16 +17,19 @@ export const DataTable = <T extends { id: string }>({
   onEdit,
   onDelete,
   onDetails,
+  renderActions,
   mobileMode = 'auto',
 }: {
   columns: Column<T>[];
   rows: T[];
   loading: boolean;
-  onEdit: (row: T) => void;
-  onDelete: (row: T) => void;
-  onDetails: (row: T) => void;
+  onEdit?: (row: T) => void;
+  onDelete?: (row: T) => void;
+  onDetails?: (row: T) => void;
+  renderActions?: (row: T) => React.ReactNode;
   mobileMode?: 'auto' | 'scroll' | 'cards';
 }) => {
+  const hasActions = Boolean(onEdit || onDelete || onDetails || renderActions);
   const resolvedMobileMode =
     mobileMode === 'auto'
       ? columns.filter((column) => !column.mobileHidden).length <= 4
@@ -50,7 +53,7 @@ export const DataTable = <T extends { id: string }>({
             {columns.map((column) => (
               <th key={String(column.key)}>{column.label}</th>
             ))}
-            <th>Ações</th>
+            {hasActions ? <th className="actions-col">Ações</th> : null}
           </tr>
         </thead>
 
@@ -63,9 +66,11 @@ export const DataTable = <T extends { id: string }>({
                     <div className="skeleton" />
                   </td>
                 ))}
-                <td>
-                  <div className="skeleton" />
-                </td>
+                {hasActions ? (
+                  <td className="actions-col">
+                    <div className="skeleton" />
+                  </td>
+                ) : null}
               </tr>
             ))
             : rows.map((row) => (
@@ -75,13 +80,16 @@ export const DataTable = <T extends { id: string }>({
                     {column.render ? column.render(row) : String(row[column.key as keyof T] ?? '')}
                   </td>
                 ))}
-                <td>
-                  <div className="actions">
-                    <button onClick={() => onDetails(row)}>Detalhes</button>
-                    <button onClick={() => onEdit(row)}>Editar</button>
-                    <button className="danger" onClick={() => onDelete(row)}>Excluir</button>
-                  </div>
-                </td>
+                {hasActions ? (
+                  <td className="actions-col">
+                    <div className="actions">
+                      {onDetails ? <button onClick={() => onDetails(row)}>Detalhes</button> : null}
+                      {onEdit ? <button onClick={() => onEdit(row)}>Editar</button> : null}
+                      {onDelete ? <button className="danger" onClick={() => onDelete(row)}>Excluir</button> : null}
+                      {renderActions ? renderActions(row) : null}
+                    </div>
+                  </td>
+                ) : null}
               </tr>
             ))}
         </tbody>
@@ -98,9 +106,11 @@ export const DataTable = <T extends { id: string }>({
                     <div className="skeleton" />
                   </div>
                 ))}
-                <div className="table-mobile-actions">
-                  <div className="skeleton" />
-                </div>
+                {hasActions ? (
+                  <div className="table-mobile-actions">
+                    <div className="skeleton" />
+                  </div>
+                ) : null}
               </article>
             ))
             : rows.map((row) => (
@@ -111,11 +121,14 @@ export const DataTable = <T extends { id: string }>({
                     <span>{column.render ? column.render(row) : String(row[column.key as keyof T] ?? '')}</span>
                   </div>
                 ))}
-                <div className="table-mobile-actions">
-                  <button onClick={() => onDetails(row)}>Detalhes</button>
-                  <button onClick={() => onEdit(row)}>Editar</button>
-                  <button className="danger" onClick={() => onDelete(row)}>Excluir</button>
-                </div>
+                {hasActions ? (
+                  <div className="table-mobile-actions">
+                    {onDetails ? <button onClick={() => onDetails(row)}>Detalhes</button> : null}
+                    {onEdit ? <button onClick={() => onEdit(row)}>Editar</button> : null}
+                    {onDelete ? <button className="danger" onClick={() => onDelete(row)}>Excluir</button> : null}
+                    {renderActions ? renderActions(row) : null}
+                  </div>
+                ) : null}
               </article>
             ))}
         </div>
