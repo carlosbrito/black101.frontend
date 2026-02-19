@@ -9,6 +9,7 @@ export type PessoaEnderecoInput = {
   cidade: string;
   uf: string;
   principal: boolean;
+  cobranca?: boolean;
 };
 
 export type PessoaContatoInput = {
@@ -16,7 +17,7 @@ export type PessoaContatoInput = {
   email: string;
   telefone1: string;
   telefone2?: string | null;
-  tipoContato?: string | null;
+  tipoContato?: number | null;
 };
 
 export type PessoaQsaInput = {
@@ -163,6 +164,12 @@ export const applyPhoneMask = (value: string): string => {
   if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
   if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
+export const applyCepMask = (value: string): string => {
+  const digits = sanitizeDocument(value).slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 };
 
 export const isValidCpf = (value: string): boolean => {

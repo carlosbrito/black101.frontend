@@ -8,6 +8,7 @@ import { EmpresaPickerDialog } from '../../../shared/ui/EmpresaPickerDialog';
 import { PageFrame } from '../../../shared/ui/PageFrame';
 import type { PagedResponse } from '../../../shared/types/paging';
 import {
+  applyCepMask,
   applyCpfCnpjMask,
   applyPhoneMask,
   buildPessoaPayload,
@@ -72,7 +73,7 @@ type ComplementoDto = {
 type ContatoDto = {
   id: string;
   cedenteId: string;
-  tipoContato: string;
+  tipoContato: number;
   nome: string;
   email: string;
   telefone1: string;
@@ -129,16 +130,96 @@ type DocumentoDto = {
 type ParametrizacaoDto = {
   id: string;
   cedenteId: string;
-  modalidade: string;
-  taxaMinima?: number | null;
-  taxaMaxima?: number | null;
-  prazoMinimoDias?: number | null;
-  prazoMaximoDias?: number | null;
+  modalidadeId: string;
+  modalidadeNome: string;
+  modalidadeCodigo: string;
   limite?: number | null;
   tranche?: number | null;
-  contaReferencia?: string | null;
+  float?: number | null;
+  fator?: number | null;
+  feeTerceiros?: number | null;
+  multaBaixa?: number | null;
+  multaBaixaCheque?: number | null;
+  multaRecompra?: number | null;
+  encargoBaixa?: number | null;
+  encargoBaixaCheque?: number | null;
+  encargoRecompra?: number | null;
+  prorrogacao?: number | null;
+  tarifaProrrogacao?: number | null;
+  tarifaRecompra?: number | null;
+  antecipacao?: number | null;
+  tarifaAntecipacao?: number | null;
+  prazoMinimo?: number | null;
+  prazoMaximo?: number | null;
+  taxaMinima?: number | null;
+  taxaMaxima?: number | null;
+  limiteMinimoSacado?: number | null;
+  limiteMaximoSacado?: number | null;
+  fidcParametrizacaoCalculoId?: string | null;
+  contaCobrancaPadraoId?: string | null;
+  meioRecebimentoPadrao?: string | null;
+  tipoBanco?: number | null;
+  classificacaoId?: string | null;
+  isPedidoDeVenda: boolean;
+  isBoletoNormal: boolean;
+  isBoletoEspecial: boolean;
+  isContaEscrow: boolean;
+  isDeposito: boolean;
+  isChequeCustodia: boolean;
+  isCartaoCredito: boolean;
+  isDuplicata: boolean;
+  isNotaPromissoria: boolean;
+  isNotaDeSeguro: boolean;
+  isCobrancaSeriada: boolean;
+  isRecibo: boolean;
+  isNotaPromissoriaFisica: boolean;
+  isNotaComercial: boolean;
+  isLetrasCombio: boolean;
+  isNotaDebito: boolean;
+  isDuplicataServico: boolean;
+  isPrecatorios: boolean;
+  isDuplicataServicoFisico: boolean;
+  isDuplicataTransporteDigital: boolean;
+  isDuplicataTransporteFisica: boolean;
+  isRenegociacaoDivida: boolean;
+  isNotaComercial3: boolean;
+  isCcbDigital: boolean;
+  isCheque: boolean;
+  isChequeManual: boolean;
+  isCteDigital: boolean;
+  isCedulaProdutoRural: boolean;
+  isContratoNormal: boolean;
+  isContrato: boolean;
+  isConfissaoDivida: boolean;
+  isAssuncaoDivida: boolean;
+  isOperacaoCartaoCredito: boolean;
+  isOperacaoCartaoCreditoLimine: boolean;
+  isCcbPreDigital: boolean;
+  isCcbPreBalcao: boolean;
+  isCcbPreCetip: boolean;
+  isOutros: boolean;
+  isCcbFormalizacaoFonada: boolean;
+  isNotaComercial2: boolean;
+  isCreditosJudiciais: boolean;
+  isCcb2: boolean;
+  isCedulaProdutoRuralFinanceira: boolean;
+  isCheque2: boolean;
+  isOutro: boolean;
   habilitado: boolean;
 };
+
+type ModalidadeOption = { id: string; nome: string; codigo: string; ativo: boolean };
+type ParamForm = Record<string, string | boolean>;
+type MetricInputKind = 'currency' | 'percentage' | 'decimal' | 'integer' | 'text';
+
+const contatoTipoOptions: Array<{ value: number; label: string }> = [
+  { value: 0, label: 'Cobrança' },
+  { value: 1, label: 'Fiscal' },
+  { value: 2, label: 'Recebimento' },
+  { value: 3, label: 'Contas a Pagar' },
+  { value: 4, label: 'Tesouraria' },
+  { value: 5, label: 'Financeiro' },
+];
 
 type ContratoDto = {
   id: string;
@@ -211,6 +292,114 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: 'historico', label: 'Histórico' },
 ];
 
+const numericDecimalKeys = [
+  'limite', 'tranche', 'float', 'fator', 'feeTerceiros',
+  'multaBaixa', 'multaBaixaCheque', 'multaRecompra', 'encargoBaixa', 'encargoBaixaCheque', 'encargoRecompra',
+  'prorrogacao', 'tarifaProrrogacao', 'tarifaRecompra', 'antecipacao', 'tarifaAntecipacao',
+  'taxaMinima', 'taxaMaxima', 'limiteMinimoSacado', 'limiteMaximoSacado',
+] as const;
+const numericIntKeys = ['prazoMinimo', 'prazoMaximo', 'tipoBanco'] as const;
+const stringNullableKeys = ['fidcParametrizacaoCalculoId', 'contaCobrancaPadraoId', 'meioRecebimentoPadrao', 'classificacaoId'] as const;
+const currencyMetricKeys = ['limite', 'tranche', 'tarifaProrrogacao', 'tarifaAntecipacao', 'tarifaRecompra', 'limiteMinimoSacado', 'limiteMaximoSacado'] as const;
+const percentageMetricKeys = ['fator', 'feeTerceiros', 'taxaMinima', 'taxaMaxima', 'multaBaixa', 'multaBaixaCheque', 'multaRecompra', 'encargoBaixa', 'encargoBaixaCheque', 'encargoRecompra', 'prorrogacao', 'antecipacao'] as const;
+const decimalMetricKeys = ['float'] as const;
+const receivedTypeFlags: Array<{ key: string; label: string }> = [
+  { key: 'isDuplicata', label: 'Duplicata (DP)' },
+  { key: 'isNotaPromissoria', label: 'Nota Promissória (NP)' },
+  { key: 'isNotaDeSeguro', label: 'Nota de Seguro (NS)' },
+  { key: 'isCobrancaSeriada', label: 'Cobrança Seriada (CS)' },
+  { key: 'isPedidoDeVenda', label: 'Recibo - Pedido de Venda' },
+  { key: 'isRecibo', label: 'Recibo (RCB)' },
+  { key: 'isNotaPromissoriaFisica', label: 'Nota Promissória Física (NPF)' },
+  { key: 'isNotaComercial', label: 'Nota Comercial (NC)' },
+  { key: 'isLetrasCombio', label: 'Letras de Câmbio (LCC)' },
+  { key: 'isNotaDebito', label: 'Nota de Débito (ND)' },
+  { key: 'isDuplicataServico', label: 'Duplicata de Serviços (DS)' },
+  { key: 'isPrecatorios', label: 'Precatórios (PCT)' },
+  { key: 'isDuplicataServicoFisico', label: 'Duplicata de Serviço Físico (DSF)' },
+  { key: 'isDuplicataTransporteDigital', label: 'Duplicata Transporte Digital (DTD)' },
+  { key: 'isDuplicataTransporteFisica', label: 'Duplicata Transporte Física (DTF)' },
+  { key: 'isRenegociacaoDivida', label: 'Renegociação de Dívida (RD)' },
+  { key: 'isNotaComercial3', label: 'Nota Comercial 3' },
+  { key: 'isCcbDigital', label: 'CCB Digital' },
+  { key: 'isCheque', label: 'Cheque' },
+  { key: 'isChequeManual', label: 'Cheque Manual' },
+  { key: 'isCteDigital', label: 'CTE Digital' },
+  { key: 'isCedulaProdutoRural', label: 'Cédula Produto Rural' },
+  { key: 'isContratoNormal', label: 'Contrato (CT)' },
+  { key: 'isContrato', label: 'Contrato Físico (CTF)' },
+  { key: 'isConfissaoDivida', label: 'Confissão de Dívida' },
+  { key: 'isAssuncaoDivida', label: 'Assunção de Dívida' },
+  { key: 'isOperacaoCartaoCredito', label: 'Operação Cartão de Crédito' },
+  { key: 'isOperacaoCartaoCreditoLimine', label: 'Operação Cartão de Crédito - Limine' },
+  { key: 'isCcbPreDigital', label: 'CCB Pré-Digital' },
+  { key: 'isCcbPreBalcao', label: 'CCB Pré-Balcão' },
+  { key: 'isCcbPreCetip', label: 'CCB Pré-Cetip' },
+  { key: 'isOutros', label: 'Outros' },
+  { key: 'isCcbFormalizacaoFonada', label: 'CCB Formalização Fonada' },
+  { key: 'isNotaComercial2', label: 'Nota Comercial 2' },
+  { key: 'isCreditosJudiciais', label: 'Créditos Judiciais' },
+  { key: 'isCcb2', label: 'CCB 2' },
+  { key: 'isCedulaProdutoRuralFinanceira', label: 'Cédula Produto Rural Financeira' },
+  { key: 'isCheque2', label: 'Cheque 2' },
+  { key: 'isOutro', label: 'Outro' },
+];
+const receiveMediumFlags: Array<{ key: string; label: string }> = [
+  { key: 'isBoletoNormal', label: 'Boleto Normal' },
+  { key: 'isBoletoEspecial', label: 'Boleto Especial' },
+  { key: 'isContaEscrow', label: 'Conta Escrow' },
+  { key: 'isDeposito', label: 'Depósito' },
+  { key: 'isChequeCustodia', label: 'Cheque Custódia' },
+  { key: 'isCartaoCredito', label: 'Cartão de Crédito' },
+];
+const allBooleanFlags = [
+  ...receivedTypeFlags.map((x) => x.key),
+  ...receiveMediumFlags.map((x) => x.key),
+] as const;
+const metricLabels: Array<{ key: string; label: string; kind: MetricInputKind }> = [
+  { key: 'limite', label: 'Limite', kind: 'currency' },
+  { key: 'tranche', label: 'Tranche', kind: 'currency' },
+  { key: 'float', label: 'Float', kind: 'decimal' },
+  { key: 'fator', label: 'Taxa (Fator %)', kind: 'percentage' },
+  { key: 'feeTerceiros', label: 'Fee Terceiros (%)', kind: 'percentage' },
+  { key: 'taxaMinima', label: 'Taxa Mínima (%)', kind: 'percentage' },
+  { key: 'taxaMaxima', label: 'Taxa Máxima (%)', kind: 'percentage' },
+  { key: 'prazoMinimo', label: 'Prazo Mínimo (dias)', kind: 'integer' },
+  { key: 'prazoMaximo', label: 'Prazo Máximo (dias)', kind: 'integer' },
+  { key: 'tarifaProrrogacao', label: 'Tarifa Prorrogação', kind: 'currency' },
+  { key: 'tarifaAntecipacao', label: 'Tarifa Antecipação', kind: 'currency' },
+  { key: 'tarifaRecompra', label: 'Tarifa Recompra', kind: 'currency' },
+  { key: 'multaBaixa', label: 'Multa Baixa', kind: 'percentage' },
+  { key: 'multaBaixaCheque', label: 'Multa Baixa Cheque', kind: 'percentage' },
+  { key: 'multaRecompra', label: 'Multa Recompra', kind: 'percentage' },
+  { key: 'encargoBaixa', label: 'Encargo Baixa', kind: 'percentage' },
+  { key: 'encargoBaixaCheque', label: 'Encargo Baixa Cheque', kind: 'percentage' },
+  { key: 'encargoRecompra', label: 'Encargo Recompra', kind: 'percentage' },
+  { key: 'prorrogacao', label: 'Prorrogação (%)', kind: 'percentage' },
+  { key: 'antecipacao', label: 'Antecipação (%)', kind: 'percentage' },
+  { key: 'limiteMinimoSacado', label: 'Limite Mínimo Sacado', kind: 'currency' },
+  { key: 'limiteMaximoSacado', label: 'Limite Máximo Sacado', kind: 'currency' },
+  { key: 'fidcParametrizacaoCalculoId', label: 'FIDC Parametrização Cálculo ID', kind: 'text' },
+  { key: 'contaCobrancaPadraoId', label: 'Conta Cobrança Padrão ID', kind: 'text' },
+  { key: 'meioRecebimentoPadrao', label: 'Meio Recebimento Padrão', kind: 'text' },
+  { key: 'tipoBanco', label: 'Tipo Banco', kind: 'integer' },
+  { key: 'classificacaoId', label: 'Classificação ID', kind: 'text' },
+];
+const buildDefaultParamForm = (): ParamForm => {
+  const form: ParamForm = { modalidadeId: '' };
+  numericDecimalKeys.forEach((key) => { form[key] = ''; });
+  numericIntKeys.forEach((key) => { form[key] = ''; });
+  stringNullableKeys.forEach((key) => { form[key] = ''; });
+  allBooleanFlags.forEach((key) => { form[key] = false; });
+  return form;
+};
+const percentageMetricSet = new Set<string>(percentageMetricKeys as readonly string[]);
+const currencyMetricSet = new Set<string>(currencyMetricKeys as readonly string[]);
+const decimalMetricSet = new Set<string>(decimalMetricKeys as readonly string[]);
+const brCurrencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const brDecimalFormatter = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+const clampPercentage = (value: number) => Math.min(99.9999, Math.max(0, value));
+
 const createInitialComplemento = (): ComplementoDto => ({
   cedenteId: '',
   nomeFantasia: '',
@@ -234,6 +423,41 @@ const parseInteger = (value: string): number | null => {
   const numeric = Number(normalized);
   return Number.isInteger(numeric) ? numeric : null;
 };
+
+const parseDecimal = (value: string) => {
+  if (!value.trim()) return null;
+  const normalized = value
+    .replace(/R\$\s?/g, '')
+    .replace('%', '')
+    .replace(/\s/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatCurrencyFromNumber = (value: number | null | undefined) => (value === null || value === undefined ? '' : brCurrencyFormatter.format(value));
+const formatPercentageFromNumber = (value: number | null | undefined) => (value === null || value === undefined ? '' : `${brDecimalFormatter.format(clampPercentage(value))}%`);
+const formatDecimalFromNumber = (value: number | null | undefined) => (value === null || value === undefined ? '' : brDecimalFormatter.format(value));
+const maskCurrencyInput = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+  return brCurrencyFormatter.format(Number(digits) / 100);
+};
+const maskPercentageInput = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+  const numeric = clampPercentage(Number(digits) / 10000);
+  return `${brDecimalFormatter.format(numeric)}%`;
+};
+const maskDecimalInput = (value: string) => {
+  const sanitized = value.replace(/[^\d,.-]/g, '').replace(',', '.');
+  if (!sanitized) return '';
+  const parsed = Number(sanitized);
+  if (!Number.isFinite(parsed)) return '';
+  return brDecimalFormatter.format(parsed);
+};
+const maskIntegerInput = (value: string) => value.replace(/\D/g, '');
 
 const parseFileName = (header: string | null, fallbackName: string): string => {
   if (!header) {
@@ -270,6 +494,7 @@ const createEnderecoForm = () => ({
   cidade: '',
   uf: '',
   principal: false,
+  cobranca: false,
 });
 
 const createPessoaContatoForm = () => ({
@@ -277,7 +502,7 @@ const createPessoaContatoForm = () => ({
   email: '',
   telefone1: '',
   telefone2: '',
-  tipoContato: '',
+  tipoContato: 0,
 });
 
 const createQsaForm = () => ({
@@ -328,12 +553,13 @@ export const CedenteFormPage = () => {
 
   const [representanteOptions, setRepresentanteOptions] = useState<RepresentanteOption[]>([]);
   const [bancoOptions, setBancoOptions] = useState<BancoOption[]>([]);
+  const [modalidades, setModalidades] = useState<ModalidadeOption[]>([]);
 
   const [selectedRepresentanteId, setSelectedRepresentanteId] = useState('');
   const [funcaoRepresentante, setFuncaoRepresentante] = useState('');
 
   const [contatoForm, setContatoForm] = useState({
-    tipoContato: 'Geral',
+    tipoContato: 0,
     nome: '',
     email: '',
     telefone1: '',
@@ -354,17 +580,7 @@ export const CedenteFormPage = () => {
   const [tipoDocumento, setTipoDocumento] = useState('Contrato Social');
   const [documentoFile, setDocumentoFile] = useState<File | null>(null);
 
-  const [parametrizacaoForm, setParametrizacaoForm] = useState({
-    modalidade: 'Padrao',
-    taxaMinima: '',
-    taxaMaxima: '',
-    prazoMinimoDias: '',
-    prazoMaximoDias: '',
-    limite: '',
-    tranche: '',
-    contaReferencia: '',
-    habilitado: true,
-  });
+  const [parametrizacaoForm, setParametrizacaoForm] = useState<ParamForm>(buildDefaultParamForm);
 
   const [contratoForm, setContratoForm] = useState({
     tipoContrato: 'Cessao',
@@ -507,26 +723,32 @@ export const CedenteFormPage = () => {
   };
 
   const loadOptions = async () => {
-    const [repRes, bancoRes] = await Promise.all([
+    const [repRes, bancoRes, modalidadesRes] = await Promise.all([
       http.get('/cadastros/representantes', {
         params: { page: 1, pageSize: 300, sortBy: 'nome', sortDir: 'asc' },
       }),
       http.get('/cadastros/bancos', {
         params: { page: 1, pageSize: 300, sortBy: 'nome', sortDir: 'asc' },
       }),
+      http.get('/cadastros/modalidades', {
+        params: { page: 1, pageSize: 200, sortBy: 'nome', sortDir: 'asc' },
+      }),
     ]);
 
     const repsPaged = readPagedResponse<RepresentanteOption>(repRes.data);
     const bancosPaged = readPagedResponse<{ id: string; nome: string }>(bancoRes.data);
+    const modalidadesPaged = readPagedResponse<ModalidadeOption>(modalidadesRes.data);
 
     setRepresentanteOptions(repsPaged.items.filter((item) => item.ativo));
     setBancoOptions(bancosPaged.items.map((item) => ({ id: item.id, nome: item.nome })));
+    setModalidades(modalidadesPaged.items.filter((item) => item.ativo));
   };
 
   useEffect(() => {
     void loadOptions().catch(() => {
       setRepresentanteOptions([]);
       setBancoOptions([]);
+      setModalidades([]);
     });
   }, []);
 
@@ -636,12 +858,17 @@ export const CedenteFormPage = () => {
           cidade: enderecoForm.cidade.trim(),
           uf: enderecoForm.uf.trim().toUpperCase(),
           principal: enderecoForm.principal || current.enderecos.length === 0,
+          cobranca: enderecoForm.cobranca || current.enderecos.length === 0,
         },
       ];
 
-      const normalized = nextEnderecos.some((item) => item.principal)
-        ? nextEnderecos.map((item, index) => ({ ...item, principal: index === nextEnderecos.findIndex((x) => x.principal) }))
-        : nextEnderecos.map((item, index) => ({ ...item, principal: index === 0 }));
+      const principalIndex = nextEnderecos.findIndex((x) => x.principal);
+      const cobrancaIndex = nextEnderecos.findIndex((x) => x.cobranca);
+      const normalized = nextEnderecos.map((item, index) => ({
+        ...item,
+        principal: principalIndex >= 0 ? index === principalIndex : index === 0,
+        cobranca: cobrancaIndex >= 0 ? index === cobrancaIndex : index === 0,
+      }));
 
       return {
         ...current,
@@ -658,6 +885,9 @@ export const CedenteFormPage = () => {
       if (next.length > 0 && !next.some((item) => item.principal)) {
         next[0] = { ...next[0], principal: true };
       }
+      if (next.length > 0 && !next.some((item) => item.cobranca)) {
+        next[0] = { ...next[0], cobranca: true };
+      }
 
       return {
         ...current,
@@ -672,6 +902,16 @@ export const CedenteFormPage = () => {
       enderecos: current.enderecos.map((item, itemIndex) => ({
         ...item,
         principal: itemIndex === index,
+      })),
+    }));
+  };
+
+  const defineEnderecoCobranca = (index: number) => {
+    setPessoaForm((current) => ({
+      ...current,
+      enderecos: current.enderecos.map((item, itemIndex) => ({
+        ...item,
+        cobranca: itemIndex === index,
       })),
     }));
   };
@@ -695,7 +935,7 @@ export const CedenteFormPage = () => {
           email: pessoaContatoForm.email.trim(),
           telefone1: pessoaContatoForm.telefone1.trim(),
           telefone2: pessoaContatoForm.telefone2.trim() || null,
-          tipoContato: pessoaContatoForm.tipoContato.trim() || null,
+          tipoContato: Number.isFinite(Number(pessoaContatoForm.tipoContato)) ? Number(pessoaContatoForm.tipoContato) : 0,
         },
       ],
     }));
@@ -896,8 +1136,8 @@ export const CedenteFormPage = () => {
         nomeFantasia: complemento.nomeFantasia?.trim() || null,
         segmento: complemento.segmento?.trim() || null,
         classificacao: complemento.classificacao?.trim() || null,
-        autoAprovacao: complemento.autoAprovacao,
-        desabilitarAcoesConsultorAposAtivo: complemento.desabilitarAcoesConsultorAposAtivo,
+        autoAprovacao: false,
+        desabilitarAcoesConsultorAposAtivo: false,
         observacoes: complemento.observacoes?.trim() || null,
       });
 
@@ -917,7 +1157,7 @@ export const CedenteFormPage = () => {
 
     await withCedenteReload(async () => {
       await http.post(`/cadastros/cedentes/${cedenteId}/contatos`, {
-        tipoContato: contatoForm.tipoContato.trim() || 'Geral',
+        tipoContato: Number(contatoForm.tipoContato ?? 0),
         nome: contatoForm.nome.trim(),
         email: contatoForm.email.trim(),
         telefone1: contatoForm.telefone1.trim(),
@@ -926,7 +1166,7 @@ export const CedenteFormPage = () => {
       });
 
       setContatoForm({
-        tipoContato: 'Geral',
+        tipoContato: 0,
         nome: '',
         email: '',
         telefone1: '',
@@ -1152,63 +1392,78 @@ export const CedenteFormPage = () => {
     });
   };
 
-  const addParametrizacao = async () => {
-    if (!parametrizacaoForm.modalidade.trim()) {
-      toast.error('Informe a modalidade.');
+  const applyParametrizacao = (item: ParametrizacaoDto) => {
+    const next = buildDefaultParamForm();
+    next.modalidadeId = item.modalidadeId;
+    numericDecimalKeys.forEach((key) => {
+      const value = item[key as keyof ParametrizacaoDto] as number | null | undefined;
+      if (currencyMetricSet.has(key)) next[key] = formatCurrencyFromNumber(value);
+      else if (percentageMetricSet.has(key)) next[key] = formatPercentageFromNumber(value);
+      else if (decimalMetricSet.has(key)) next[key] = formatDecimalFromNumber(value);
+      else next[key] = value === null || value === undefined ? '' : String(value);
+    });
+    numericIntKeys.forEach((key) => {
+      const value = item[key as keyof ParametrizacaoDto] as number | null | undefined;
+      next[key] = value === null || value === undefined ? '' : String(value);
+    });
+    stringNullableKeys.forEach((key) => {
+      const value = item[key as keyof ParametrizacaoDto] as string | null | undefined;
+      next[key] = value ?? '';
+    });
+    allBooleanFlags.forEach((key) => {
+      next[key] = Boolean(item[key as keyof ParametrizacaoDto] as boolean | undefined);
+    });
+    next.habilitado = Boolean(item.habilitado);
+    setParametrizacaoForm(next);
+  };
+
+  const changeModalidade = (modalidadeId: string) => {
+    const existing = parametrizacoes.find((item) => item.modalidadeId === modalidadeId);
+    if (existing) {
+      applyParametrizacao(existing);
+      return;
+    }
+    const next = buildDefaultParamForm();
+    next.modalidadeId = modalidadeId;
+    setParametrizacaoForm(next);
+  };
+
+  const updateMetricValue = (key: string, kind: MetricInputKind, rawValue: string) => {
+    let nextValue = rawValue;
+    if (kind === 'currency') nextValue = maskCurrencyInput(rawValue);
+    if (kind === 'percentage') nextValue = maskPercentageInput(rawValue);
+    if (kind === 'decimal') nextValue = maskDecimalInput(rawValue);
+    if (kind === 'integer') nextValue = maskIntegerInput(rawValue);
+    setParametrizacaoForm((c) => ({ ...c, [key]: nextValue }));
+  };
+
+  const saveParametrizacao = async () => {
+    const modalidadeId = String(parametrizacaoForm.modalidadeId || '').trim();
+    if (!modalidadeId) {
+      toast.error('Selecione uma modalidade.');
       return;
     }
 
-    await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/parametrizacao`, {
-        modalidade: parametrizacaoForm.modalidade.trim(),
-        taxaMinima: parseNumber(parametrizacaoForm.taxaMinima),
-        taxaMaxima: parseNumber(parametrizacaoForm.taxaMaxima),
-        prazoMinimoDias: parseInteger(parametrizacaoForm.prazoMinimoDias),
-        prazoMaximoDias: parseInteger(parametrizacaoForm.prazoMaximoDias),
-        limite: parseNumber(parametrizacaoForm.limite),
-        tranche: parseNumber(parametrizacaoForm.tranche),
-        contaReferencia: parametrizacaoForm.contaReferencia.trim() || null,
-        habilitado: parametrizacaoForm.habilitado,
-      });
-
-      setParametrizacaoForm({
-        modalidade: 'Padrao',
-        taxaMinima: '',
-        taxaMaxima: '',
-        prazoMinimoDias: '',
-        prazoMaximoDias: '',
-        limite: '',
-        tranche: '',
-        contaReferencia: '',
-        habilitado: true,
-      });
-
-      toast.success('Parametrização adicionada.');
+    const payload: Record<string, unknown> = { modalidadeId, habilitado: Boolean(parametrizacaoForm.habilitado) };
+    numericDecimalKeys.forEach((key) => { payload[key] = parseDecimal(String(parametrizacaoForm[key] ?? '')); });
+    numericIntKeys.forEach((key) => { payload[key] = parseInteger(String(parametrizacaoForm[key] ?? '')); });
+    stringNullableKeys.forEach((key) => {
+      const value = String(parametrizacaoForm[key] ?? '').trim();
+      payload[key] = value ? value : null;
     });
-  };
+    allBooleanFlags.forEach((key) => { payload[key] = Boolean(parametrizacaoForm[key]); });
 
-  const updateParametrizacao = async (item: ParametrizacaoDto) => {
-    const modalidade = window.prompt('Modalidade', item.modalidade);
-    if (modalidade === null) return;
-    const taxaMinima = window.prompt('Taxa mínima', item.taxaMinima?.toString() ?? '');
-    if (taxaMinima === null) return;
-    const taxaMaxima = window.prompt('Taxa máxima', item.taxaMaxima?.toString() ?? '');
-    if (taxaMaxima === null) return;
-
+    const existing = parametrizacoes.find((item) => item.modalidadeId === modalidadeId);
     await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/parametrizacao/${item.id}`, {
-        modalidade: modalidade.trim(),
-        taxaMinima: parseNumber(taxaMinima),
-        taxaMaxima: parseNumber(taxaMaxima),
-        prazoMinimoDias: item.prazoMinimoDias ?? null,
-        prazoMaximoDias: item.prazoMaximoDias ?? null,
-        limite: item.limite ?? null,
-        tranche: item.tranche ?? null,
-        contaReferencia: item.contaReferencia ?? null,
-        habilitado: item.habilitado,
-      });
-
-      toast.success('Parametrização atualizada.');
+      if (existing) {
+        await http.put(`/cadastros/cedentes/${cedenteId}/parametrizacao/${existing.id}`, payload);
+      } else {
+        await http.post(`/cadastros/cedentes/${cedenteId}/parametrizacao`, payload);
+      }
+      toast.success('Parametrização salva.');
+      if (!existing) {
+        setParametrizacaoForm(buildDefaultParamForm());
+      }
     });
   };
 
@@ -1715,7 +1970,7 @@ export const CedenteFormPage = () => {
           <h3>Endereços</h3>
         </header>
         <div className="entity-grid cols-3">
-          <label><span>CEP</span><input value={enderecoForm.cep} onChange={(event) => setEnderecoForm((c) => ({ ...c, cep: event.target.value }))} /></label>
+          <label><span>CEP</span><input value={enderecoForm.cep} onChange={(event) => setEnderecoForm((c) => ({ ...c, cep: applyCepMask(event.target.value) }))} /></label>
           <label><span>Logradouro</span><input value={enderecoForm.logradouro} onChange={(event) => setEnderecoForm((c) => ({ ...c, logradouro: event.target.value }))} /></label>
           <label><span>Número</span><input value={enderecoForm.numero} onChange={(event) => setEnderecoForm((c) => ({ ...c, numero: event.target.value }))} /></label>
           <label><span>Complemento</span><input value={enderecoForm.complemento} onChange={(event) => setEnderecoForm((c) => ({ ...c, complemento: event.target.value }))} /></label>
@@ -1723,6 +1978,7 @@ export const CedenteFormPage = () => {
           <label><span>Cidade</span><input value={enderecoForm.cidade} onChange={(event) => setEnderecoForm((c) => ({ ...c, cidade: event.target.value }))} /></label>
           <label><span>UF</span><input maxLength={2} value={enderecoForm.uf} onChange={(event) => setEnderecoForm((c) => ({ ...c, uf: event.target.value.toUpperCase() }))} /></label>
           <label className="checkbox-inline"><input type="checkbox" checked={enderecoForm.principal} onChange={(event) => setEnderecoForm((c) => ({ ...c, principal: event.target.checked }))} /><span>Principal</span></label>
+          <label className="checkbox-inline"><input type="checkbox" checked={Boolean(enderecoForm.cobranca)} onChange={(event) => setEnderecoForm((c) => ({ ...c, cobranca: event.target.checked }))} /><span>Cobrança</span></label>
           <div className="entity-inline-actions"><button type="button" className="btn-main" onClick={addPessoaEndereco}>Adicionar endereço</button></div>
         </div>
         <div className="entity-table-wrap">
@@ -1733,12 +1989,13 @@ export const CedenteFormPage = () => {
                 <th>Cidade</th>
                 <th>UF</th>
                 <th>Principal</th>
+                <th>Cobrança</th>
                 <th className="col-actions">Ações</th>
               </tr>
             </thead>
             <tbody>
               {pessoaForm.enderecos.length === 0 ? (
-                <tr><td colSpan={5}>Nenhum endereço informado.</td></tr>
+                <tr><td colSpan={6}>Nenhum endereço informado.</td></tr>
               ) : (
                 pessoaForm.enderecos.map((item, index) => (
                   <tr key={`${item.cep}-${item.logradouro}-${index}`}>
@@ -1746,9 +2003,11 @@ export const CedenteFormPage = () => {
                     <td>{item.cidade}</td>
                     <td>{item.uf}</td>
                     <td>{item.principal ? 'Sim' : 'Não'}</td>
+                    <td>{item.cobranca ? 'Sim' : 'Não'}</td>
                     <td className="col-actions">
                       <div className="table-actions">
                         {!item.principal ? <button type="button" onClick={() => defineEnderecoPrincipal(index)}>Definir principal</button> : null}
+                        {!item.cobranca ? <button type="button" onClick={() => defineEnderecoCobranca(index)}>Definir cobrança</button> : null}
                         <button type="button" className="danger" onClick={() => removePessoaEndereco(index)}>Excluir</button>
                       </div>
                     </td>
@@ -1765,7 +2024,12 @@ export const CedenteFormPage = () => {
         <div className="entity-grid cols-3">
           <label><span>Nome</span><input value={pessoaContatoForm.nome} onChange={(event) => setPessoaContatoForm((c) => ({ ...c, nome: event.target.value }))} /></label>
           <label><span>E-mail</span><input type="email" value={pessoaContatoForm.email} onChange={(event) => setPessoaContatoForm((c) => ({ ...c, email: event.target.value }))} /></label>
-          <label><span>Tipo</span><input value={pessoaContatoForm.tipoContato} onChange={(event) => setPessoaContatoForm((c) => ({ ...c, tipoContato: event.target.value }))} /></label>
+          <label>
+            <span>Tipo</span>
+            <select value={String(pessoaContatoForm.tipoContato)} onChange={(event) => setPessoaContatoForm((c) => ({ ...c, tipoContato: Number(event.target.value) }))}>
+              {contatoTipoOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
           <label><span>Telefone 1</span><input value={pessoaContatoForm.telefone1} onChange={(event) => setPessoaContatoForm((c) => ({ ...c, telefone1: applyPhoneMask(event.target.value) }))} /></label>
           <label><span>Telefone 2</span><input value={pessoaContatoForm.telefone2} onChange={(event) => setPessoaContatoForm((c) => ({ ...c, telefone2: applyPhoneMask(event.target.value) }))} /></label>
           <div className="entity-inline-actions"><button type="button" className="btn-main" onClick={addPessoaContato}>Adicionar contato</button></div>
@@ -1788,7 +2052,7 @@ export const CedenteFormPage = () => {
                 pessoaForm.contatos.map((item, index) => (
                   <tr key={`${item.email}-${item.nome}-${index}`}>
                     <td>{item.nome}</td>
-                    <td>{item.tipoContato || '-'}</td>
+                    <td>{contatoTipoOptions.find((x) => x.value === Number(item.tipoContato ?? 0))?.label ?? 'Cobrança'}</td>
                     <td>{item.email}</td>
                     <td>{item.telefone1}</td>
                     <td className="col-actions">
@@ -1874,18 +2138,6 @@ export const CedenteFormPage = () => {
           <span>Classificação</span>
           <input value={complemento.classificacao ?? ''} onChange={(event) => setComplemento((current) => ({ ...current, classificacao: event.target.value }))} />
         </label>
-        <label className="checkbox-inline">
-          <input type="checkbox" checked={complemento.autoAprovacao} onChange={(event) => setComplemento((current) => ({ ...current, autoAprovacao: event.target.checked }))} />
-          <span>Auto aprovação</span>
-        </label>
-        <label className="checkbox-inline">
-          <input
-            type="checkbox"
-            checked={complemento.desabilitarAcoesConsultorAposAtivo}
-            onChange={(event) => setComplemento((current) => ({ ...current, desabilitarAcoesConsultorAposAtivo: event.target.checked }))}
-          />
-          <span>Desabilitar ações consultor após ativo</span>
-        </label>
         <label className="span-all">
           <span>Observações</span>
           <textarea rows={4} value={complemento.observacoes ?? ''} onChange={(event) => setComplemento((current) => ({ ...current, observacoes: event.target.value }))} />
@@ -1904,7 +2156,9 @@ export const CedenteFormPage = () => {
         <div className="entity-grid cols-3">
           <label>
             <span>Tipo</span>
-            <input value={contatoForm.tipoContato} onChange={(event) => setContatoForm((current) => ({ ...current, tipoContato: event.target.value }))} />
+            <select value={String(contatoForm.tipoContato)} onChange={(event) => setContatoForm((current) => ({ ...current, tipoContato: Number(event.target.value) }))}>
+              {contatoTipoOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
           </label>
           <label>
             <span>Nome</span>
@@ -1947,7 +2201,7 @@ export const CedenteFormPage = () => {
               {contatos.map((item) => (
                 <tr key={item.id}>
                   <td>{item.nome}</td>
-                  <td>{item.tipoContato}</td>
+                  <td>{contatoTipoOptions.find((x) => x.value === Number(item.tipoContato ?? 0))?.label ?? 'Cobrança'}</td>
                   <td>{item.email}</td>
                   <td>{item.telefone1}</td>
                   <td className="col-actions">
@@ -2209,27 +2463,71 @@ export const CedenteFormPage = () => {
   const renderParametrizacaoTab = () => (
     <section className="entity-form-stack">
       <section className="entity-card">
-        <header><h3>Nova parametrização</h3></header>
+        <header>
+          <h3>Parametrização</h3>
+          <p>Configuração completa por modalidade, igual ao cadastro de empresa.</p>
+        </header>
         <div className="entity-grid cols-3">
-          <label><span>Modalidade</span><input value={parametrizacaoForm.modalidade} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, modalidade: event.target.value }))} /></label>
-          <label><span>Taxa mínima</span><input value={parametrizacaoForm.taxaMinima} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, taxaMinima: event.target.value }))} /></label>
-          <label><span>Taxa máxima</span><input value={parametrizacaoForm.taxaMaxima} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, taxaMaxima: event.target.value }))} /></label>
-          <label><span>Prazo mínimo</span><input value={parametrizacaoForm.prazoMinimoDias} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, prazoMinimoDias: event.target.value }))} /></label>
-          <label><span>Prazo máximo</span><input value={parametrizacaoForm.prazoMaximoDias} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, prazoMaximoDias: event.target.value }))} /></label>
-          <label><span>Limite</span><input value={parametrizacaoForm.limite} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, limite: event.target.value }))} /></label>
-          <label><span>Tranche</span><input value={parametrizacaoForm.tranche} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, tranche: event.target.value }))} /></label>
-          <label><span>Conta referência</span><input value={parametrizacaoForm.contaReferencia} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, contaReferencia: event.target.value }))} /></label>
-          <label className="checkbox-inline"><input type="checkbox" checked={parametrizacaoForm.habilitado} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, habilitado: event.target.checked }))} /><span>Habilitado</span></label>
-          <div className="entity-inline-actions"><button className="btn-main" onClick={() => void addParametrizacao()}>Adicionar</button></div>
+          <label>
+            <span>Modalidade</span>
+            <select value={String(parametrizacaoForm.modalidadeId)} onChange={(event) => changeModalidade(event.target.value)}>
+              <option value="">Selecione...</option>
+              {modalidades.map((item) => <option key={item.id} value={item.id}>{item.nome} ({item.codigo})</option>)}
+            </select>
+          </label>
         </div>
       </section>
       <section className="entity-card">
+        <header><h3>Parâmetros</h3></header>
+        <div className="entity-grid cols-3">
+          {metricLabels.map((item) => (
+            <label key={item.key}>
+              <span>{item.label}</span>
+              <input
+                value={String(parametrizacaoForm[item.key] ?? '')}
+                inputMode={item.kind === 'text' ? 'text' : 'decimal'}
+                onChange={(event) => updateMetricValue(item.key, item.kind, event.target.value)}
+              />
+            </label>
+          ))}
+          <label className="checkbox-inline">
+            <input type="checkbox" checked={Boolean(parametrizacaoForm.habilitado)} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, habilitado: event.target.checked }))} />
+            <span>Habilitado</span>
+          </label>
+        </div>
+      </section>
+      <section className="entity-card">
+        <header><h3>Tipos de Recebível</h3></header>
+        <div className="checkbox-list-grid">
+          {receivedTypeFlags.map((item) => (
+            <label className="checkbox-grid-item" key={item.key}>
+              <input type="checkbox" checked={Boolean(parametrizacaoForm[item.key])} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, [item.key]: event.target.checked }))} />
+              <span>{item.label}</span>
+            </label>
+          ))}
+        </div>
+      </section>
+      <section className="entity-card">
+        <header><h3>Meios de Recebimento</h3></header>
+        <div className="checkbox-list-grid">
+          {receiveMediumFlags.map((item) => (
+            <label className="checkbox-grid-item" key={item.key}>
+              <input type="checkbox" checked={Boolean(parametrizacaoForm[item.key])} onChange={(event) => setParametrizacaoForm((c) => ({ ...c, [item.key]: event.target.checked }))} />
+              <span>{item.label}</span>
+            </label>
+          ))}
+        </div>
+      </section>
+      <div className="entity-actions">
+        <button className="btn-main" onClick={() => void saveParametrizacao()}>Salvar parametrização</button>
+      </div>
+      <section className="entity-card">
         {renderSimpleCrudRows(
           parametrizacoes,
-          ['Modalidade', 'Taxa Min.', 'Taxa Max.', 'Habilitado'],
-          (item) => [<td key="m">{item.modalidade}</td>, <td key="n">{item.taxaMinima ?? '-'}</td>, <td key="x">{item.taxaMaxima ?? '-'}</td>, <td key="h">{item.habilitado ? 'Sim' : 'Não'}</td>],
+          ['Modalidade', 'Limite', 'Taxa Min/Max', 'Habilitado'],
+          (item) => [<td key="m">{item.modalidadeNome}</td>, <td key="l">{item.limite ?? '-'}</td>, <td key="x">{item.taxaMinima ?? '-'} / {item.taxaMaxima ?? '-'}</td>, <td key="h">{item.habilitado ? 'Sim' : 'Não'}</td>],
           (item) => void removeParametrizacao(item),
-          (item) => void updateParametrizacao(item),
+          (item) => applyParametrizacao(item),
         )}
       </section>
     </section>
