@@ -48,6 +48,7 @@ import { BancarizadorFormPage } from '../../features/cadastros/bancarizadores/Ba
 import { TestemunhaFormPage } from '../../features/cadastros/testemunhas/TestemunhaFormPage';
 import { ModalidadeFormPage } from '../../features/cadastros/modalidades/ModalidadeFormPage';
 import { EmpresaFormPage } from '../../features/cadastros/empresas/EmpresaFormPage';
+import { DespesaFormPage } from '../../features/cadastros/despesas/DespesaFormPage';
 import {
   ConsultoraFormPage,
   CustodianteFormPage,
@@ -138,6 +139,8 @@ export const AppRouter = () => {
           <Route path="/cadastro/prestadores/novo" element={<PrestadorFormPage />} />
           <Route path="/cadastro/prestadores/:id" element={<PrestadorFormPage />} />
           <Route path="/cadastro/despesas" element={<DespesasPage />} />
+          <Route path="/cadastro/despesas/novo" element={<DespesaFormPage />} />
+          <Route path="/cadastro/despesas/:id" element={<DespesaFormPage />} />
           <Route path="/cadastro/grupo-economico" element={<GrupoEconomicoPage />} />
           <Route path="/cadastro/esteira-credito" element={<EsteiraCreditoPage />} />
           <Route path="/cadastro/indices-debentures" element={<IndicesDebenturePage />} />

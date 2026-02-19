@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { HubConnectionBuilder, HubConnectionState } from '@microsoft/signalr';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../app/auth/AuthContext';
 import { CONTEXTO_EMPRESA_HEADER, getErrorMessage, http, requiresEmpresaChoice } from '../../shared/api/http';
@@ -100,8 +101,6 @@ const inferTipoArquivo = (fileName: string): 'CNAB' | 'XML' | 'ZIP' => {
   if (ext === '.zip') return 'ZIP';
   return 'CNAB';
 };
-
-const isProcessing = (status?: string) => status === 'PROCESSANDO' || status === 'VALIDADO' || status === 'PENDENTE';
 
 const mapImportacaoItem = (raw: unknown): ImportacaoItem => {
   const item = asRecord(raw);
@@ -214,9 +213,13 @@ export const ImportacoesPage = () => {
   const [modalidadeLoading, setModalidadeLoading] = useState(false);
   const [bancoOptions, setBancoOptions] = useState<BancoOption[]>([]);
   const [bancosLoading, setBancosLoading] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
 
-  const intervalRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const selectedIdRef = useRef<string | null>(null);
+  const listRef = useRef<(() => Promise<void>) | null>(null);
+  const detailsRef = useRef<((id: string, options?: FetchDetailsOptions) => Promise<void>) | null>(null);
+  const connectionRef = useRef<import('@microsoft/signalr').HubConnection | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
 
   const tipoArquivoAtual = useMemo(() => (file ? inferTipoArquivo(file.name) : ''), [file]);
   const isCnab = tipoArquivoAtual === 'CNAB';
@@ -248,13 +251,6 @@ export const ImportacoesPage = () => {
     ],
     [cedenteLookup],
   );
-
-  const stopPolling = useCallback(() => {
-    if (intervalRef.current !== null) {
-      window.clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }, []);
 
   const list = useCallback(async () => {
     setLoading(true);
@@ -292,6 +288,14 @@ export const ImportacoesPage = () => {
       }
     }
   }, []);
+
+  useEffect(() => {
+    listRef.current = list;
+  }, [list]);
+
+  useEffect(() => {
+    detailsRef.current = fetchDetailsById;
+  }, [fetchDetailsById]);
 
   const loadCedentesAtivos = useCallback(async () => {
     setCedentesLoading(true);
@@ -365,8 +369,15 @@ export const ImportacoesPage = () => {
           rows
             .map((item) => {
               const row = asRecord(item);
-              const value = readField(row, 'modalidade', 'Modalidade');
-              return value ? String(value) : '';
+              const value = readField(
+                row,
+                'modalidadeNome',
+                'ModalidadeNome',
+                // fallback para ambientes legados/mocks
+                'modalidade',
+                'Modalidade',
+              );
+              return value ? String(value).trim() : '';
             })
             .filter((item) => item.length > 0),
         ),
@@ -410,28 +421,93 @@ export const ImportacoesPage = () => {
   }, [selected?.id]);
 
   useEffect(() => {
-    const shouldPoll = rows.some((row) => isProcessing(row.status)) || isProcessing(selected?.status);
+    let cancelled = false;
+    const hubUrl = new URL('/hubs/importacoes', http.defaults.baseURL ?? window.location.origin).toString();
+    const connection = new HubConnectionBuilder()
+      .withUrl(hubUrl, { withCredentials: true })
+      .withAutomaticReconnect([0, 2000, 5000, 10000])
+      .build();
 
-    if (!shouldPoll) {
-      stopPolling();
-      return;
-    }
+    connection.on('ImportacaoChanged', (payload: { importacaoId?: string; ImportacaoId?: string }) => {
+      const changedId = String(payload.importacaoId ?? payload.ImportacaoId ?? '');
+      if (!changedId) return;
 
-    if (intervalRef.current !== null) {
-      return;
-    }
-
-    intervalRef.current = window.setInterval(() => {
-      void list();
-      if (selectedIdRef.current) {
-        void fetchDetailsById(selectedIdRef.current, { silent: true });
+      if (refreshTimerRef.current === null) {
+        refreshTimerRef.current = window.setTimeout(() => {
+          refreshTimerRef.current = null;
+          if (listRef.current) {
+            void listRef.current();
+          }
+        }, 300);
       }
-    }, 5000);
 
-    return () => stopPolling();
-  }, [rows, selected?.status, fetchDetailsById, list, stopPolling]);
+      if (selectedIdRef.current && changedId === selectedIdRef.current && detailsRef.current) {
+        void detailsRef.current(changedId, { silent: true });
+      }
+    });
 
-  useEffect(() => () => stopPolling(), [stopPolling]);
+    connection.onreconnecting(() => {
+      setRealtimeStatus('connecting');
+    });
+
+    connection.onreconnected(() => {
+      setRealtimeStatus('connected');
+      if (selectedEmpresaIds.length > 0) {
+        void connection.invoke('SubscribeEmpresas', selectedEmpresaIds);
+      }
+    });
+
+    connection.onclose(() => {
+      setRealtimeStatus('disconnected');
+    });
+
+    const start = async () => {
+      setRealtimeStatus('connecting');
+      try {
+        await connection.start();
+        if (cancelled) {
+          await connection.stop();
+          return;
+        }
+
+        connectionRef.current = connection;
+        setRealtimeStatus('connected');
+        if (selectedEmpresaIds.length > 0) {
+          await connection.invoke('SubscribeEmpresas', selectedEmpresaIds);
+        }
+      } catch {
+        setRealtimeStatus('disconnected');
+      }
+    };
+
+    void start();
+
+    return () => {
+      cancelled = true;
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+      const current = connectionRef.current;
+      connectionRef.current = null;
+      if (current) {
+        void current.stop();
+      } else {
+        void connection.stop();
+      }
+    };
+  // conexão criada uma única vez e reusa subscribe por efeito dedicado
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const current = connectionRef.current;
+    if (!current || current.state !== HubConnectionState.Connected || selectedEmpresaIds.length === 0) {
+      return;
+    }
+
+    void current.invoke('SubscribeEmpresas', selectedEmpresaIds);
+  }, [selectedEmpresaIds]);
 
   const computeHash = async (inputFile: File) => {
     const buffer = await inputFile.arrayBuffer();
@@ -727,10 +803,16 @@ export const ImportacoesPage = () => {
           <header>
             <div>
               <h3>Fila e histórico de importações</h3>
-              <p>Atualização automática enquanto existirem execuções em processamento.</p>
+              <p>Atualização em tempo real via websocket. Use o refresh para recarga manual da tabela.</p>
             </div>
             <div className="pager">
+              <span className={`realtime-status ${realtimeStatus}`}>
+                {realtimeStatus === 'connected' ? 'Ao vivo' : realtimeStatus === 'connecting' ? 'Conectando...' : 'Desconectado'}
+              </span>
               <span>{totalItems} registro(s)</span>
+              <button onClick={() => void list()} disabled={loading}>
+                {loading ? 'Atualizando...' : 'Atualizar tabela'}
+              </button>
               <button disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>
                 Anterior
               </button>

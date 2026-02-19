@@ -113,8 +113,8 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     return created;
   };
   ensureCedenteTabs(seededCedenteId).parametrizacao = [
-    { id: createId(), cedenteId: seededCedenteId, modalidade: 'DUPLICATA' },
-    { id: createId(), cedenteId: seededCedenteId, modalidade: 'CCB' },
+    { id: createId(), cedenteId: seededCedenteId, modalidadeNome: 'DUPLICATA' },
+    { id: createId(), cedenteId: seededCedenteId, modalidadeNome: 'CCB' },
   ];
 
   await page.route('**/auth/csrf', async (route) => {
@@ -994,7 +994,17 @@ test('importacoes: envia arquivo e abre detalhes', async ({ page }) => {
   await login(page);
   await page.goto('/operacoes/importacoes');
 
+  const cedenteField = page.locator('.upload-card .form-grid label').filter({ hasText: 'Cedente*' }).first();
+  const modalidadeField = page.locator('.upload-card .form-grid label').filter({ hasText: 'Modalidade' }).first();
+  const [cedenteBox, modalidadeBox] = await Promise.all([cedenteField.boundingBox(), modalidadeField.boundingBox()]);
+  expect(cedenteBox).not.toBeNull();
+  expect(modalidadeBox).not.toBeNull();
+  expect((cedenteBox as { y: number }).y).toBeLessThan((modalidadeBox as { y: number }).y);
+
   await page.locator('select').first().selectOption({ index: 1 });
+  await expect(page.locator('.upload-card .form-grid label:has-text("Modalidade") option')).toHaveCount(3);
+  await expect(page.locator('.upload-card .form-grid label:has-text("Modalidade") option').nth(1)).toHaveText('DUPLICATA');
+  await expect(page.locator('.upload-card .form-grid label:has-text("Modalidade") option').nth(2)).toHaveText('CCB');
   await page.locator('input[type="file"]').setInputFiles({
     name: 'lote-teste.rem',
     mimeType: 'text/plain',

@@ -7,6 +7,7 @@ export { SacadosPage } from './sacados/SacadosListPage';
 export { BancarizadoresPage } from './bancarizadores/BancarizadoresPage';
 export { TestemunhasPage } from './testemunhas/TestemunhasListPage';
 export { ModalidadesPage } from './modalidades/ModalidadesListPage';
+export { DespesasPage } from './despesas/DespesasListPage';
 export {
   ConsultorasPage,
   CustodiantePage,
@@ -21,7 +22,6 @@ export {
   WhiteListPage,
   BlackListPage,
   PrestadoresPage,
-  DespesasPage,
   GrupoEconomicoPage,
   EsteiraCreditoPage,
   IndicesDebenturePage,

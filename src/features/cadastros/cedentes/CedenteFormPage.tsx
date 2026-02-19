@@ -247,10 +247,21 @@ type AtualizacaoDto = {
 type DespesaDto = {
   id: string;
   cedenteId: string;
-  descricao: string;
+  despesaId: string;
+  despesaNome: string;
+  despesaSegmento: number;
+  despesaTipo: number;
+  despesaStatus: number;
   valor: number;
-  periodicidade?: string | null;
-  ativo: boolean;
+};
+
+type DespesaOption = {
+  id: string;
+  nome: string;
+};
+
+type DespesaImportavelDto = {
+  id: string;
 };
 
 type JuridicoDto = {
@@ -485,6 +496,17 @@ const normalizeStatusToken = (value: string): string =>
     .replace(/\s+/g, '_')
     .toUpperCase();
 
+const expenseSegmentLabel = (segmento: number) => {
+  switch (segmento) {
+    case 1: return 'Recebível';
+    case 2: return 'Operação';
+    case 3: return 'Sacado';
+    default: return '-';
+  }
+};
+
+const expenseTypeLabel = (tipo: number) => (tipo === 1 ? '%' : 'R$');
+
 const createEnderecoForm = () => ({
   cep: '',
   logradouro: '',
@@ -554,6 +576,7 @@ export const CedenteFormPage = () => {
   const [representanteOptions, setRepresentanteOptions] = useState<RepresentanteOption[]>([]);
   const [bancoOptions, setBancoOptions] = useState<BancoOption[]>([]);
   const [modalidades, setModalidades] = useState<ModalidadeOption[]>([]);
+  const [despesaOptions, setDespesaOptions] = useState<DespesaOption[]>([]);
 
   const [selectedRepresentanteId, setSelectedRepresentanteId] = useState('');
   const [funcaoRepresentante, setFuncaoRepresentante] = useState('');
@@ -602,10 +625,8 @@ export const CedenteFormPage = () => {
   });
 
   const [despesaForm, setDespesaForm] = useState({
-    descricao: '',
+    despesaId: '',
     valor: '',
-    periodicidade: '',
-    ativo: true,
   });
 
   const [juridicoForm, setJuridicoForm] = useState({
@@ -723,7 +744,7 @@ export const CedenteFormPage = () => {
   };
 
   const loadOptions = async () => {
-    const [repRes, bancoRes, modalidadesRes] = await Promise.all([
+    const [repRes, bancoRes, modalidadesRes, despesasRes] = await Promise.all([
       http.get('/cadastros/representantes', {
         params: { page: 1, pageSize: 300, sortBy: 'nome', sortDir: 'asc' },
       }),
@@ -733,6 +754,7 @@ export const CedenteFormPage = () => {
       http.get('/cadastros/modalidades', {
         params: { page: 1, pageSize: 200, sortBy: 'nome', sortDir: 'asc' },
       }),
+      http.get('/cadastros/despesas/lookup'),
     ]);
 
     const repsPaged = readPagedResponse<RepresentanteOption>(repRes.data);
@@ -742,6 +764,7 @@ export const CedenteFormPage = () => {
     setRepresentanteOptions(repsPaged.items.filter((item) => item.ativo));
     setBancoOptions(bancosPaged.items.map((item) => ({ id: item.id, nome: item.nome })));
     setModalidades(modalidadesPaged.items.filter((item) => item.ativo));
+    setDespesaOptions((despesasRes.data as DespesaOption[]) ?? []);
   };
 
   useEffect(() => {
@@ -749,6 +772,7 @@ export const CedenteFormPage = () => {
       setRepresentanteOptions([]);
       setBancoOptions([]);
       setModalidades([]);
+      setDespesaOptions([]);
     });
   }, []);
 
@@ -1612,24 +1636,20 @@ export const CedenteFormPage = () => {
   };
 
   const addDespesa = async () => {
-    if (!despesaForm.descricao.trim() || parseNumber(despesaForm.valor) === null) {
-      toast.error('Informe descrição e valor da despesa.');
+    if (!despesaForm.despesaId || parseNumber(despesaForm.valor) === null) {
+      toast.error('Informe a despesa e o valor.');
       return;
     }
 
     await withCedenteReload(async () => {
       await http.post(`/cadastros/cedentes/${cedenteId}/despesas`, {
-        descricao: despesaForm.descricao.trim(),
+        despesaId: despesaForm.despesaId,
         valor: parseNumber(despesaForm.valor),
-        periodicidade: despesaForm.periodicidade.trim() || null,
-        ativo: despesaForm.ativo,
       });
 
       setDespesaForm({
-        descricao: '',
+        despesaId: '',
         valor: '',
-        periodicidade: '',
-        ativo: true,
       });
 
       toast.success('Despesa adicionada.');
@@ -1637,12 +1657,8 @@ export const CedenteFormPage = () => {
   };
 
   const updateDespesa = async (item: DespesaDto) => {
-    const descricao = window.prompt('Descrição da despesa', item.descricao);
-    if (descricao === null) return;
     const valor = window.prompt('Valor', item.valor.toString());
     if (valor === null) return;
-    const periodicidade = window.prompt('Periodicidade', item.periodicidade ?? '');
-    if (periodicidade === null) return;
 
     await withCedenteReload(async () => {
       const parsedValor = parseNumber(valor);
@@ -1651,10 +1667,8 @@ export const CedenteFormPage = () => {
       }
 
       await http.put(`/cadastros/cedentes/${cedenteId}/despesas/${item.id}`, {
-        descricao: descricao.trim(),
+        despesaId: item.despesaId,
         valor: parsedValor,
-        periodicidade: periodicidade.trim() || null,
-        ativo: item.ativo,
       });
 
       toast.success('Despesa atualizada.');
@@ -1669,6 +1683,28 @@ export const CedenteFormPage = () => {
     await withCedenteReload(async () => {
       await http.delete(`/cadastros/cedentes/${cedenteId}/despesas/${item.id}`);
       toast.success('Despesa removida.');
+    });
+  };
+
+  const importarDespesas = async () => {
+    if (!cedenteId) return;
+
+    const response = await http.get(`/cadastros/cedentes/${cedenteId}/despesas/importaveis`);
+    const importaveis = (response.data as DespesaImportavelDto[]) ?? [];
+    if (importaveis.length === 0) {
+      toast('Não há despesas disponíveis para importação.');
+      return;
+    }
+
+    if (!window.confirm(`Importar ${importaveis.length} despesa(s) para este cedente?`)) {
+      return;
+    }
+
+    await withCedenteReload(async () => {
+      await http.post(`/cadastros/cedentes/${cedenteId}/despesas/importar`, {
+        despesasIds: importaveis.map((item) => item.id),
+      });
+      toast.success('Despesas importadas.');
     });
   };
 
@@ -2591,18 +2627,25 @@ export const CedenteFormPage = () => {
       <section className="entity-card">
         <header><h3>Nova despesa</h3></header>
         <div className="entity-grid cols-3">
-          <label><span>Descrição</span><input value={despesaForm.descricao} onChange={(event) => setDespesaForm((c) => ({ ...c, descricao: event.target.value }))} /></label>
+          <label>
+            <span>Despesa</span>
+            <select value={despesaForm.despesaId} onChange={(event) => setDespesaForm((c) => ({ ...c, despesaId: event.target.value }))}>
+              <option value="">Selecione</option>
+              {despesaOptions.map((item) => (
+                <option key={item.id} value={item.id}>{item.nome}</option>
+              ))}
+            </select>
+          </label>
           <label><span>Valor</span><input value={despesaForm.valor} onChange={(event) => setDespesaForm((c) => ({ ...c, valor: event.target.value }))} /></label>
-          <label><span>Periodicidade</span><input value={despesaForm.periodicidade} onChange={(event) => setDespesaForm((c) => ({ ...c, periodicidade: event.target.value }))} /></label>
-          <label className="checkbox-inline"><input type="checkbox" checked={despesaForm.ativo} onChange={(event) => setDespesaForm((c) => ({ ...c, ativo: event.target.checked }))} /><span>Ativa</span></label>
           <div className="entity-inline-actions"><button className="btn-main" onClick={() => void addDespesa()}>Adicionar</button></div>
+          <div className="entity-inline-actions"><button className="btn-muted" onClick={() => void importarDespesas()}>Importar despesas</button></div>
         </div>
       </section>
       <section className="entity-card">
         {renderSimpleCrudRows(
           despesas,
-          ['Descrição', 'Valor', 'Periodicidade', 'Status'],
-          (item) => [<td key="d">{item.descricao}</td>, <td key="v">{item.valor}</td>, <td key="p">{item.periodicidade || '-'}</td>, <td key="s">{item.ativo ? 'Ativa' : 'Inativa'}</td>],
+          ['Despesa', 'Cálculo por', 'Tipo', 'Valor'],
+          (item) => [<td key="d">{item.despesaNome}</td>, <td key="c">{expenseSegmentLabel(item.despesaSegmento)}</td>, <td key="t">{expenseTypeLabel(item.despesaTipo)}</td>, <td key="v">{item.valor}</td>],
           (item) => void removeDespesa(item),
           (item) => void updateDespesa(item),
         )}
