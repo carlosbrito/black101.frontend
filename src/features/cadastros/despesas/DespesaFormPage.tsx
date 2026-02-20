@@ -42,7 +42,7 @@ export const DespesaFormPage = () => {
 
       setLoading(true);
       try {
-        const response = await http.get(`/cadastros/despesas/${despesaId}`);
+        const response = await http.get(`/api/despesa/get/unique/${despesaId}`);
         const data = response.data as DespesaDto;
         setForm({
           nome: data.nome ?? '',
@@ -83,23 +83,24 @@ export const DespesaFormPage = () => {
     setSaving(true);
     try {
       const payload = {
+        id: despesaId ?? undefined,
         nome: form.nome.trim(),
         segmento: form.segmento,
-        tipo: form.tipo,
-        valorBase: valor,
-        observacoes: form.observacoes.trim() || null,
+        tipo: String(form.tipo),
+        valor: String(valor),
+        obs: form.observacoes.trim() || null,
       };
 
       if (despesaId) {
-        await http.put(`/cadastros/despesas/${despesaId}`, payload);
+        await http.put('/api/despesa/update', payload);
         if (form.ativa) {
-          await http.post(`/cadastros/despesas/${despesaId}/ativar`);
+          await http.put(`/api/despesa/activate/${despesaId}`);
         } else {
-          await http.post(`/cadastros/despesas/${despesaId}/inativar`);
+          await http.put(`/api/despesa/deactivate/${despesaId}`);
         }
         toast.success('Despesa atualizada.');
       } else {
-        const response = await http.post('/cadastros/despesas', payload);
+        const response = await http.post('/api/despesa/register', payload);
         const created = response.data as { id: string };
         toast.success('Despesa criada.');
         navigate(`/cadastro/despesas/${created.id}`, { replace: true });

@@ -34,11 +34,38 @@
 - `src/shared/api/http.ts`
   - suporte a `VITE_AUTH_BASE_PATH`, `VITE_LEGACY_AUTH_BASE_PATH`, `VITE_CSRF_ENDPOINT`
   - token bearer legado em memória (sem persistir em `localStorage`/`sessionStorage`)
+  - desempacotamento automático de envelope `{ model, success, code, errors }`
 - `src/app/auth/AuthContext.tsx`
   - fallback automático de autenticação moderna para legado
-  - hidratação de sessão por `/user/get/context` quando `/auth/me` não existe
+  - hidratação de sessão por `/api/user/get/context` quando `/auth/me` não existe
   - fallback de troca de contexto de empresa
+- `src/features/admin/AdminUsuariosPage.tsx`
+  - alinhado para `/api/user/get/list` e `/api/user/register`
+- `src/features/admin/AdminRolesPage.tsx`
+  - alinhado para `/api/grupo/get/list` e `/api/grupo/register`
+- `src/features/cadastros/bancos/BancosListPage.tsx`
+- `src/features/cadastros/bancos/BancoFormPage.tsx`
+  - alinhados para `/api/banco/get/list|get/unique|register|update|remove`
+- `src/features/cadastros/despesas/DespesasListPage.tsx`
+- `src/features/cadastros/despesas/DespesaFormPage.tsx`
+  - alinhados para `/api/despesa/get/list|get/unique|register|update|remove|activate|deactivate`
+- `src/features/cadastros/agentes/AgentesListPage.tsx`
+- `src/features/cadastros/agentes/AgenteFormPage.tsx`
+  - alinhados para `/api/agente/get/list|get/unique|register|update|remove`
+  - criação/edição com vínculo via `/api/pessoa/get/cnpjcpf|register|update`
+- `src/features/cadastros/bancarizadores/BancarizadoresPage.tsx`
+- `src/features/cadastros/bancarizadores/BancarizadorFormPage.tsx`
+  - alinhados para `/api/bancarizador/get/list|get/unique|register|update|remove|activate|deactivate|get/cnpjcpf/gestora`
+- `src/features/cadastros/testemunhas/TestemunhasListPage.tsx`
+- `src/features/cadastros/testemunhas/TestemunhaFormPage.tsx`
+  - alinhados para `/api/testemunha/get/list|get/unique|register|update|remove`
+  - criação/edição com vínculo via `/api/pessoa/get/cnpjcpf|register|update`
+- `src/features/cadastros/representantes/RepresentantesListPage.tsx`
+- `src/features/cadastros/representantes/RepresentanteFormPage.tsx`
+  - alinhados para `/api/representante/get/list|get/unique|register|update|remove`
+  - criação/edição com vínculo via `/api/pessoa/get/cnpjcpf|register|update`
 
 ## Gaps conhecidos
 - Fluxo de 2FA do legado ainda não foi migrado para React.
 - Ainda há cobertura E2E focada em API mock para muitos fluxos; backend real foi adicionado como smoke test inicial.
+- Não foi identificado controller dedicado de `Modalidade` no backend C# atual; rota permanece em investigação/mapeamento.

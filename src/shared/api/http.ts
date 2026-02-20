@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5287';
 const AUTH_BASE_PATH = import.meta.env.VITE_AUTH_BASE_PATH ?? '/auth';
-const LEGACY_AUTH_BASE_PATH = import.meta.env.VITE_LEGACY_AUTH_BASE_PATH ?? '/authentication';
+const LEGACY_AUTH_BASE_PATH = import.meta.env.VITE_LEGACY_AUTH_BASE_PATH ?? '/api/authentication';
 const CSRF_ENDPOINT = import.meta.env.VITE_CSRF_ENDPOINT ?? '';
 export const CONTEXTO_EMPRESA_HEADER = 'X-Contexto-Empresa-Id';
 let legacyAccessToken: string | null = null;

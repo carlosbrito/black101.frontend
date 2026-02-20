@@ -12,7 +12,7 @@ export const AdminRolesPage = () => {
 
   const list = async () => {
     try {
-      const response = await http.get('/grupo/get/list', { params: { page: 1, pageSize: 100 } });
+      const response = await http.get('/api/grupo/get/list', { params: { page: 1, pageSize: 100 } });
       const paged = readPagedResponse<ApiRoleItem>(response.data);
       setRoles(paged.items.map((item) => ({ id: String(item.id ?? item.Id), nome: String(item.nome ?? item.Nome ?? '') })));
     } catch (error) {
@@ -25,7 +25,7 @@ export const AdminRolesPage = () => {
     if (!nome) return;
 
     try {
-      await http.post('/grupo/register', {
+      await http.post('/api/grupo/register', {
         nome,
         descricao: nome,
         statusAtivo: true,

@@ -43,11 +43,11 @@ export const BancosPage = () => {
     setLoading(true);
 
     try {
-      const response = await http.get('/cadastros/bancos', {
+      const response = await http.get('/api/banco/get/list', {
         params: {
           page,
           pageSize,
-          search: search || undefined,
+          keyword: search || undefined,
         },
       });
 
@@ -73,7 +73,7 @@ export const BancosPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/bancos/${row.id}`);
+      await http.delete(`/api/banco/remove/${row.id}`);
       toast.success('Banco removido.');
       await load();
     } catch (error) {

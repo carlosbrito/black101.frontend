@@ -7,8 +7,17 @@
 - Cobre login, navegação e CRUD principais.
 - Agora compatível com:
   - `/auth/*`
-  - `/authentication/*`
-  - `/user/get/context`
+  - `/api/authentication/*`
+  - `/api/user/get/context`
+  - `/api/user/*`
+  - `/api/grupo/*`
+  - `/api/pessoa/*`
+  - `/api/agente/*`
+  - `/api/testemunha/*`
+  - `/api/representante/*`
+  - `/api/bancarizador/*`
+  - `/api/banco/*`
+  - `/api/despesa/*`
 
 2. `e2e/backend-real.spec.ts`
 - Objetivo: smoke test contra backend real (sem mocks).

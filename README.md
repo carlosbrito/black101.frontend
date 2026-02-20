@@ -26,14 +26,14 @@ npm run e2e
 # .env.local
 VITE_API_BASE_URL=https://localhost:7110
 VITE_AUTH_BASE_PATH=/auth
-VITE_LEGACY_AUTH_BASE_PATH=/authentication
+VITE_LEGACY_AUTH_BASE_PATH=/api/authentication
 VITE_CSRF_ENDPOINT=/auth/csrf
 ```
 
 ## Compatibilidade de autenticação
 
 - Fluxo moderno: `VITE_AUTH_BASE_PATH` (padrão `/auth`)
-- Fluxo legado/backend C#: `VITE_LEGACY_AUTH_BASE_PATH` (padrão `/authentication`)
+- Fluxo legado/backend C#: `VITE_LEGACY_AUTH_BASE_PATH` (padrão `/api/authentication`)
 - CSRF é opcional. Se não houver endpoint CSRF no backend, deixe `VITE_CSRF_ENDPOINT` vazio.
 
 ## E2E com backend real

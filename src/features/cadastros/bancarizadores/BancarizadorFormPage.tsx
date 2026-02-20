@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../../shared/api/http';
 import { PageFrame } from '../../../shared/ui/PageFrame';
 import {
   applyCpfCnpjMask,
-  applyPhoneMask,
   formatCpfCnpj,
   formatDateTime,
   isValidCpfCnpj,
-  isValidPhone,
   readPagedResponse,
   sanitizeDocument,
   type HistoricoItemDto,
@@ -22,19 +20,23 @@ type TabKey = 'bancarizador' | 'contas' | 'anexos' | 'observacoes' | 'historico'
 
 type BancarizadorDto = {
   id: string;
-  pessoaId: string;
-  nome: string;
-  documento: string;
-  email: string;
-  telefone?: string | null;
-  ativo: boolean;
+  nome?: string;
+  cnpjCpf?: string;
+  observacao?: string | null;
+  status?: number;
+};
+
+type GestoraLookupDto = {
+  bancarizadorId?: string | null;
+  pessoaId?: string | null;
+  nome?: string;
+  cnpjCpf?: string;
 };
 
 type BancarizadorFormState = {
   nome: string;
   documento: string;
-  email: string;
-  telefone: string;
+  observacao: string;
   ativo: boolean;
 };
 
@@ -61,8 +63,11 @@ const emptyStateMessageByTab: Record<Exclude<TabKey, 'bancarizador' | 'historico
   },
 };
 
+const activeFromStatus = (status?: number) => Number(status ?? 1) === 1;
+
 export const BancarizadorFormPage = () => {
   const params = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const bancarizadorId = params.id;
   const isEdit = !!bancarizadorId;
@@ -71,11 +76,11 @@ export const BancarizadorFormPage = () => {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('bancarizador');
   const [pessoaId, setPessoaId] = useState<string | null>(null);
+  const [originalAtivo, setOriginalAtivo] = useState(true);
   const [form, setForm] = useState<BancarizadorFormState>({
     nome: '',
     documento: '',
-    email: '',
-    telefone: '',
+    observacao: '',
     ativo: true,
   });
   const [historicoPaged, setHistoricoPaged] = useState({
@@ -117,25 +122,49 @@ export const BancarizadorFormPage = () => {
       }));
     }
   };
+
   useEffect(() => {
     const bootstrap = async () => {
-      if (!bancarizadorId) {
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       try {
-        const response = await http.get(`/cadastros/bancarizadores/${bancarizadorId}`);
-        const bancarizador = response.data as BancarizadorDto;
-        setPessoaId(bancarizador.pessoaId);
-        setForm({
-          nome: bancarizador.nome ?? '',
-          documento: applyCpfCnpjMask(bancarizador.documento ?? ''),
-          email: bancarizador.email ?? '',
-          telefone: applyPhoneMask(bancarizador.telefone ?? ''),
-          ativo: bancarizador.ativo,
+        if (bancarizadorId) {
+          const response = await http.get<BancarizadorDto>(`/api/bancarizador/get/unique/${bancarizadorId}`);
+          const bancarizador = response.data;
+          const ativo = activeFromStatus(bancarizador.status);
+          setForm({
+            nome: bancarizador.nome ?? '',
+            documento: applyCpfCnpjMask(bancarizador.cnpjCpf ?? ''),
+            observacao: bancarizador.observacao ?? '',
+            ativo,
+          });
+          setOriginalAtivo(ativo);
+          return;
+        }
+
+        const documento = sanitizeDocument(searchParams.get('documento') ?? '');
+        if (!documento) {
+          setLoading(false);
+          return;
+        }
+
+        setForm((current) => ({ ...current, documento: applyCpfCnpjMask(documento) }));
+
+        const lookupResponse = await http.get<GestoraLookupDto>('/api/bancarizador/get/cnpjcpf/gestora', {
+          params: { cnpjcpf: documento },
         });
+
+        const lookup = lookupResponse.data;
+        if (lookup?.bancarizadorId) {
+          navigate(`/cadastro/bancarizadores/${lookup.bancarizadorId}`, { replace: true });
+          return;
+        }
+
+        setPessoaId(lookup?.pessoaId ?? null);
+        setForm((current) => ({
+          ...current,
+          nome: lookup?.nome ?? current.nome,
+          documento: applyCpfCnpjMask(lookup?.cnpjCpf ?? documento),
+        }));
       } catch (error) {
         toast.error(getErrorMessage(error));
       } finally {
@@ -144,11 +173,12 @@ export const BancarizadorFormPage = () => {
     };
 
     void bootstrap();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bancarizadorId, navigate, searchParams]);
+
   useEffect(() => {
     if (!bancarizadorId || activeTab !== 'historico') return;
     void loadHistorico(bancarizadorId, historicoPaged.page);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab, bancarizadorId, historicoPaged.page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureValidForm = () => {
     if (!form.nome.trim()) {
@@ -157,17 +187,7 @@ export const BancarizadorFormPage = () => {
     }
 
     if (!isValidCpfCnpj(form.documento)) {
-      toast.error('Informe um CPF/CNPJ válido.');
-      return false;
-    }
-
-    if (!form.email.trim()) {
-      toast.error('Informe o e-mail do bancarizador.');
-      return false;
-    }
-
-    if (form.telefone.trim() && !isValidPhone(form.telefone)) {
-      toast.error('Informe um telefone válido com DDD.');
+      toast.error('Informe um CNPJ/CPF válido.');
       return false;
     }
 
@@ -184,22 +204,41 @@ export const BancarizadorFormPage = () => {
     setSaving(true);
 
     try {
-      const payload = {
-        nome: form.nome.trim(),
-        documento: sanitizeDocument(form.documento),
-        email: form.email.trim(),
-        telefone: form.telefone.trim() || null,
-        ativo: form.ativo,
-      };
-
       if (bancarizadorId) {
-        await http.put(`/cadastros/bancarizadores/${bancarizadorId}`, payload);
+        await http.put('/api/bancarizador/update', {
+          id: bancarizadorId,
+          observacao: form.observacao.trim() || null,
+        });
+
+        if (form.ativo !== originalAtivo) {
+          if (form.ativo) {
+            await http.put(`/api/bancarizador/activate/${bancarizadorId}`);
+          } else {
+            await http.put(`/api/bancarizador/deactivate/${bancarizadorId}`);
+          }
+          setOriginalAtivo(form.ativo);
+        }
+
         toast.success('Bancarizador atualizado.');
       } else {
-        const response = await http.post('/cadastros/bancarizadores', payload);
-        const created = response.data as { id: string };
+        const response = await http.post('/api/bancarizador/register', {
+          nome: form.nome.trim(),
+          cnpjCpf: sanitizeDocument(form.documento),
+          observacao: form.observacao.trim() || null,
+        });
+
+        const created = response.data as Record<string, unknown>;
+        const createdId = String(created.id ?? created.Id ?? response.data ?? '');
+        if (!createdId) {
+          throw new Error('Não foi possível criar o bancarizador.');
+        }
+
+        if (!form.ativo) {
+          await http.put(`/api/bancarizador/deactivate/${createdId}`);
+        }
+
         toast.success('Bancarizador criado.');
-        navigate(`/cadastro/bancarizadores/${created.id}`, { replace: true });
+        navigate(`/cadastro/bancarizadores/${createdId}`, { replace: true });
       }
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -227,7 +266,7 @@ export const BancarizadorFormPage = () => {
       <section className="entity-card">
         <header>
           <h3>Dados do Bancarizador</h3>
-          <p>Cadastro em tela inteira, com vínculo automático em Pessoa.</p>
+          <p>Cadastro em tela inteira no padrão legado.</p>
         </header>
         <div className="entity-grid cols-3">
           <label>
@@ -236,6 +275,7 @@ export const BancarizadorFormPage = () => {
               value={form.nome}
               onChange={(event) => setForm((current) => ({ ...current, nome: event.target.value }))}
               required
+              disabled={isEdit}
             />
           </label>
           <label>
@@ -244,6 +284,7 @@ export const BancarizadorFormPage = () => {
               value={form.documento}
               onChange={(event) => setForm((current) => ({ ...current, documento: applyCpfCnpjMask(event.target.value) }))}
               required
+              disabled={isEdit}
             />
           </label>
           <label className="checkbox-inline">
@@ -254,20 +295,12 @@ export const BancarizadorFormPage = () => {
             />
             <span>Bancarizador ativo</span>
           </label>
-          <label>
-            <span>E-mail</span>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-              required
-            />
-          </label>
-          <label>
-            <span>Telefone</span>
-            <input
-              value={form.telefone}
-              onChange={(event) => setForm((current) => ({ ...current, telefone: applyPhoneMask(event.target.value) }))}
+          <label style={{ gridColumn: '1 / -1' }}>
+            <span>Observação</span>
+            <textarea
+              value={form.observacao}
+              onChange={(event) => setForm((current) => ({ ...current, observacao: event.target.value }))}
+              rows={4}
             />
           </label>
         </div>
@@ -356,7 +389,7 @@ export const BancarizadorFormPage = () => {
       }
     >
       <div className="entity-meta-bar">
-        <span><strong>Pessoa:</strong> {pessoaId ?? 'Será vinculada automaticamente'}</span>
+        <span><strong>Pessoa:</strong> {pessoaId ?? 'Será vinculada automaticamente quando disponível'}</span>
         <span><strong>Documento:</strong> {formatCpfCnpj(form.documento)}</span>
       </div>
 
@@ -384,5 +417,3 @@ export const BancarizadorFormPage = () => {
     </PageFrame>
   );
 };
-
-

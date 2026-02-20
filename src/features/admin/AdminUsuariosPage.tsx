@@ -22,7 +22,7 @@ export const AdminUsuariosPage = () => {
   const list = async () => {
     setLoading(true);
     try {
-      const response = await http.get('/user/get/list', { params: { page: 1, pageSize: 30 } });
+      const response = await http.get('/api/user/get/list', { params: { page: 1, pageSize: 30 } });
       const paged = readPagedResponse<ApiUserItem>(response.data);
       const source = paged.items;
       setRows(source.map((item) => ({
@@ -45,7 +45,7 @@ export const AdminUsuariosPage = () => {
     if (!email) return;
 
     try {
-      await http.post('/user/register', {
+      await http.post('/api/user/register', {
         pessoaId,
         email,
       });

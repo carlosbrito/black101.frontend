@@ -184,7 +184,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     try {
-      const legacyContextResponse = await http.get<LegacyEnvelope<LegacyUserContext>>('/user/get/context');
+      const legacyContextResponse = await http.get<LegacyEnvelope<LegacyUserContext>>('/api/user/get/context');
       const legacyContext = unwrapModel(legacyContextResponse.data);
       const tokenPayload = decodeJwtPayload(getLegacyAccessToken() ?? '');
 
@@ -280,7 +280,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw modernError;
       }
 
-      await http.put('/fidc/contexto/set', empresaIds);
+      await http.put('/api/fidc/contexto/set', empresaIds);
     }
 
     await refreshMe();

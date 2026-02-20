@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../../shared/api/http';
 import { PageFrame } from '../../../shared/ui/PageFrame';
@@ -20,14 +20,23 @@ import '../administradoras/entity-form.css';
 
 type TabKey = 'testemunha' | 'complemento' | 'anexos' | 'observacoes' | 'historico';
 
+type PessoaContatoDto = {
+  email?: string | null;
+  telefone1?: string | null;
+  telefone2?: string | null;
+};
+
+type PessoaDto = {
+  id?: string;
+  nome?: string;
+  cnpjCpf?: string;
+  contatos?: PessoaContatoDto[];
+};
+
 type TestemunhaDto = {
   id: string;
-  pessoaId: string;
-  nome: string;
-  documento: string;
-  email?: string | null;
-  telefone?: string | null;
-  ativo: boolean;
+  status?: number;
+  pessoa?: PessoaDto;
 };
 
 type TestemunhaFormState = {
@@ -61,8 +70,12 @@ const emptyStateMessageByTab: Record<Exclude<TabKey, 'testemunha' | 'historico'>
   },
 };
 
+const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
+const statusFromActive = (ativo: boolean) => (ativo ? 0 : 1);
+
 export const TestemunhaFormPage = () => {
   const params = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const testemunhaId = params.id;
   const isEdit = !!testemunhaId;
@@ -117,25 +130,46 @@ export const TestemunhaFormPage = () => {
       }));
     }
   };
+
+  const applyPessoaOnForm = (pessoa: PessoaDto | undefined, ativo = true) => {
+    const contato = pessoa?.contatos?.[0];
+    setPessoaId(pessoa?.id ?? null);
+    setForm((current) => ({
+      ...current,
+      nome: pessoa?.nome ?? '',
+      documento: applyCpfCnpjMask(pessoa?.cnpjCpf ?? ''),
+      email: contato?.email ?? '',
+      telefone: applyPhoneMask(contato?.telefone1 ?? contato?.telefone2 ?? ''),
+      ativo,
+    }));
+  };
+
   useEffect(() => {
     const bootstrap = async () => {
-      if (!testemunhaId) {
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       try {
-        const response = await http.get(`/cadastros/testemunhas/${testemunhaId}`);
-        const testemunha = response.data as TestemunhaDto;
-        setPessoaId(testemunha.pessoaId);
-        setForm({
-          nome: testemunha.nome ?? '',
-          documento: applyCpfCnpjMask(testemunha.documento ?? ''),
-          email: testemunha.email ?? '',
-          telefone: applyPhoneMask(testemunha.telefone ?? ''),
-          ativo: testemunha.ativo,
+        if (testemunhaId) {
+          const response = await http.get<TestemunhaDto>(`/api/testemunha/get/unique/${testemunhaId}`);
+          const testemunha = response.data;
+          applyPessoaOnForm(testemunha.pessoa, Number(testemunha.status ?? 0) === 0);
+          return;
+        }
+
+        const documento = sanitizeDocument(searchParams.get('documento') ?? '');
+        if (!documento) {
+          setLoading(false);
+          return;
+        }
+
+        setForm((current) => ({ ...current, documento: applyCpfCnpjMask(documento) }));
+        const pessoaResponse = await http.get<PessoaDto>(`/api/pessoa/get/cnpjcpf/${documento}`, {
+          params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
         });
+        const pessoa = pessoaResponse.data;
+
+        if (pessoa?.id && pessoa.id !== EMPTY_GUID) {
+          applyPessoaOnForm(pessoa, true);
+        }
       } catch (error) {
         toast.error(getErrorMessage(error));
       } finally {
@@ -144,11 +178,12 @@ export const TestemunhaFormPage = () => {
     };
 
     void bootstrap();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams, testemunhaId]);
+
   useEffect(() => {
     if (!testemunhaId || activeTab !== 'historico') return;
     void loadHistorico(testemunhaId, historicoPaged.page);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab, historicoPaged.page, testemunhaId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureValidForm = () => {
     if (!form.nome.trim()) {
@@ -169,6 +204,46 @@ export const TestemunhaFormPage = () => {
     return true;
   };
 
+  const upsertPessoa = async (): Promise<string> => {
+    const documento = sanitizeDocument(form.documento);
+
+    const pessoaByDocumentResponse = await http.get<PessoaDto>(`/api/pessoa/get/cnpjcpf/${documento}`, {
+      params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
+    });
+
+    const found = pessoaByDocumentResponse.data;
+    const foundId = found?.id && found.id !== EMPTY_GUID ? found.id : null;
+
+    const payload = {
+      nome: form.nome.trim(),
+      cnpjCpf: documento,
+      contatos: [
+        {
+          nome: form.nome.trim(),
+          email: form.email.trim() || null,
+          telefone1: sanitizeDocument(form.telefone) || null,
+          telefone2: null,
+          observacoes: null,
+        },
+      ],
+    };
+
+    if (foundId) {
+      await http.put('/api/pessoa/update', { id: foundId, ...payload });
+      return foundId;
+    }
+
+    const createResponse = await http.post('/api/pessoa/register', payload);
+    const created = createResponse.data as Record<string, unknown>;
+    const createdId = String(created.id ?? created.Id ?? '');
+
+    if (!createdId) {
+      throw new Error('Não foi possível criar a pessoa da testemunha.');
+    }
+
+    return createdId;
+  };
+
   const onSave = async (event: FormEvent) => {
     event.preventDefault();
 
@@ -179,22 +254,32 @@ export const TestemunhaFormPage = () => {
     setSaving(true);
 
     try {
-      const payload = {
-        nome: form.nome.trim(),
-        documento: sanitizeDocument(form.documento),
-        email: form.email.trim() || null,
-        telefone: form.telefone.trim() || null,
-        ativo: form.ativo,
-      };
+      const resolvedPessoaId = await upsertPessoa();
+      setPessoaId(resolvedPessoaId);
 
       if (testemunhaId) {
-        await http.put(`/cadastros/testemunhas/${testemunhaId}`, payload);
+        await http.put('/api/testemunha/update', {
+          id: testemunhaId,
+          status: statusFromActive(form.ativo),
+        });
         toast.success('Testemunha atualizada.');
       } else {
-        const response = await http.post('/cadastros/testemunhas', payload);
-        const created = response.data as { id: string };
+        const response = await http.post('/api/testemunha/register', { pessoaId: resolvedPessoaId });
+        const created = response.data as Record<string, unknown>;
+        const createdId = String(created.id ?? created.Id ?? response.data ?? '');
+        if (!createdId) {
+          throw new Error('Não foi possível criar a testemunha.');
+        }
+
+        if (!form.ativo) {
+          await http.put('/api/testemunha/update', {
+            id: createdId,
+            status: statusFromActive(false),
+          });
+        }
+
         toast.success('Testemunha criada.');
-        navigate(`/cadastro/testemunhas/${created.id}`, { replace: true });
+        navigate(`/cadastro/testemunhas/${createdId}`, { replace: true });
       }
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -205,7 +290,7 @@ export const TestemunhaFormPage = () => {
 
   const currentTitle = useMemo(
     () => (isEdit ? `Testemunha: ${form.nome || 'Editar'}` : 'Nova Testemunha'),
-    [isEdit, form.nome],
+    [form.nome, isEdit],
   );
 
   const changeTab = (key: TabKey) => {
@@ -378,5 +463,3 @@ export const TestemunhaFormPage = () => {
     </PageFrame>
   );
 };
-
-

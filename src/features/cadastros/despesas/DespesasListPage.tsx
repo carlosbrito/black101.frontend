@@ -58,8 +58,8 @@ export const DespesasPage = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const response = await http.get('/cadastros/despesas', {
-        params: { page, pageSize, search: search || undefined },
+      const response = await http.get('/api/despesa/get/list', {
+        params: { page, pageSize, keyword: search || undefined },
       });
       const paged = readPagedResponse<DespesaRow>(response.data);
       setRows(paged.items);
@@ -81,7 +81,7 @@ export const DespesasPage = () => {
   const removeItem = async (row: DespesaRow) => {
     if (!window.confirm(`Excluir despesa '${row.nome}'?`)) return;
     try {
-      await http.delete(`/cadastros/despesas/${row.id}`);
+      await http.delete(`/api/despesa/remove/${row.id}`);
       toast.success('Despesa removida.');
       await load();
     } catch (error) {
