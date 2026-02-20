@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../../shared/api/http';
 import { PageFrame } from '../../../shared/ui/PageFrame';
@@ -8,15 +8,12 @@ import {
   applyCpfCnpjMask,
   applyPhoneMask,
   formatCpfCnpj,
-  formatDateTime,
   isValidCpfCnpj,
   isValidPhone,
-  readPagedResponse,
   sanitizeDocument,
-  type CadastroArquivoDto,
-  type CadastroObservacaoDto,
-  type HistoricoItemDto,
 } from '../cadastroCommon';
+import type { BasicoEntityApi } from './entityApi';
+import { buildEntityPath } from './entityApi';
 import '../cadastro.css';
 import '../administradoras/entity-form.css';
 
@@ -24,14 +21,29 @@ type TabKey = 'cadastro' | 'complemento' | 'anexos' | 'observacoes' | 'historico
 
 type BasicoDto = {
   id: string;
-  nome: string;
-  codigo?: string | null;
-  documento?: string | null;
-  email?: string | null;
-  telefone?: string | null;
-  cidade?: string | null;
-  uf?: string | null;
-  ativo: boolean;
+  status?: number;
+  pessoa?: {
+    id?: string;
+    nome?: string;
+    cnpjCpf?: string;
+    cidade?: string | null;
+    uf?: string | null;
+    contatos?: Array<{
+      email?: string | null;
+      telefone1?: string | null;
+      telefone2?: string | null;
+    }>;
+  };
+  dadosPrestador?: {
+    nome?: string;
+    cnpjCpf?: string;
+  };
+  contatos?: Array<{
+    email?: string | null;
+    telefone1?: string | null;
+    telefone2?: string | null;
+  }>;
+  pessoaId?: string;
 };
 
 type BasicoFormState = {
@@ -46,7 +58,7 @@ type BasicoFormState = {
 
 type Props = {
   title: string;
-  endpoint: string;
+  api: BasicoEntityApi;
   listRoute: string;
   singularLabel: string;
 };
@@ -59,8 +71,13 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: 'historico', label: 'Histórico' },
 ];
 
-export const BasicoEntityFormPage = ({ title, endpoint, listRoute, singularLabel }: Props) => {
+const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
+
+const statusFromActive = (ativo: boolean) => (ativo ? 0 : 1);
+
+export const BasicoEntityFormPage = ({ title, api, listRoute, singularLabel }: Props) => {
   const params = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const cadastroId = params.id;
   const isEdit = !!cadastroId;
@@ -77,66 +94,57 @@ export const BasicoEntityFormPage = ({ title, endpoint, listRoute, singularLabel
     uf: '',
     ativo: true,
   });
-
-  const [anexosRows, setAnexosRows] = useState<CadastroArquivoDto[]>([]);
-  const [anexoFile, setAnexoFile] = useState<File | null>(null);
-  const [observacoesRows, setObservacoesRows] = useState<CadastroObservacaoDto[]>([]);
-  const [textoObservacao, setTextoObservacao] = useState('');
-  const [historicoPaged, setHistoricoPaged] = useState({
-    items: [] as HistoricoItemDto[],
-    page: 1,
-    pageSize: 20,
-    totalItems: 0,
-    totalPages: 1,
-  });
+  const [pessoaId, setPessoaId] = useState<string | null>(null);
+  const isPrestador = api.key === 'prestador';
 
   const canAccessSubTabs = isEdit;
 
-  const loadSubTabs = async (id: string) => {
-    const [anexosRes, observacoesRes, historicoRes] = await Promise.all([
-      http.get(`${endpoint}/${id}/anexos`),
-      http.get(`${endpoint}/${id}/observacoes`),
-      http.get(`${endpoint}/${id}/historico`, { params: { page: 1, pageSize: 20 } }),
-    ]);
-
-    setAnexosRows((anexosRes.data as CadastroArquivoDto[]) ?? []);
-    setObservacoesRows((observacoesRes.data as CadastroObservacaoDto[]) ?? []);
-    setHistoricoPaged(readPagedResponse<HistoricoItemDto>(historicoRes.data));
-  };
-
-  const loadHistorico = async (id: string, page: number) => {
-    const historicoRes = await http.get(`${endpoint}/${id}/historico`, {
-      params: {
-        page,
-        pageSize: historicoPaged.pageSize,
-      },
+  const applyPessoaOnForm = (item: BasicoDto) => {
+    const pessoa = item.pessoa ?? {
+      id: item.pessoaId,
+      nome: item.dadosPrestador?.nome,
+      cnpjCpf: item.dadosPrestador?.cnpjCpf,
+      contatos: item.contatos,
+    };
+    const contato = pessoa?.contatos?.[0];
+    setPessoaId(pessoa?.id ?? item.pessoaId ?? null);
+    setForm({
+      nome: pessoa?.nome ?? '',
+      documento: applyCpfCnpjMask(pessoa?.cnpjCpf ?? ''),
+      email: contato?.email ?? '',
+      telefone: applyPhoneMask(contato?.telefone1 ?? contato?.telefone2 ?? ''),
+      cidade: pessoa?.cidade ?? '',
+      uf: pessoa?.uf ?? '',
+      ativo: api.supportsStatus ? Number(item.status ?? 0) === 0 : true,
     });
-
-    setHistoricoPaged(readPagedResponse<HistoricoItemDto>(historicoRes.data));
   };
+
   useEffect(() => {
     const bootstrap = async () => {
-      if (!cadastroId) {
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       try {
-        const response = await http.get(`${endpoint}/${cadastroId}`);
-        const item = response.data as BasicoDto;
+        if (cadastroId) {
+          const response = await http.get<BasicoDto>(buildEntityPath(api, api.uniquePath, cadastroId));
+          applyPessoaOnForm(response.data);
+          return;
+        }
 
-        setForm({
-          nome: item.nome ?? '',
-          documento: applyCpfCnpjMask(item.documento ?? ''),
-          email: item.email ?? '',
-          telefone: applyPhoneMask(item.telefone ?? ''),
-          cidade: item.cidade ?? '',
-          uf: item.uf ?? '',
-          ativo: item.ativo,
+        const documento = sanitizeDocument(searchParams.get('documento') ?? '');
+        if (!documento) return;
+
+        setForm((current) => ({ ...current, documento: applyCpfCnpjMask(documento) }));
+        const pessoaResponse = await http.get<{ id?: string; nome?: string; cnpjCpf?: string }>(`/api/pessoa/get/cnpjcpf/${documento}`, {
+          params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
         });
-
-        await loadSubTabs(cadastroId);
+        const pessoa = pessoaResponse.data;
+        if (pessoa?.id && pessoa.id !== EMPTY_GUID) {
+          setPessoaId(pessoa.id);
+          setForm((current) => ({
+            ...current,
+            nome: pessoa.nome ?? current.nome,
+            documento: applyCpfCnpjMask(pessoa.cnpjCpf ?? current.documento),
+          }));
+        }
       } catch (error) {
         toast.error(getErrorMessage(error));
       } finally {
@@ -145,11 +153,7 @@ export const BasicoEntityFormPage = ({ title, endpoint, listRoute, singularLabel
     };
 
     void bootstrap();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!cadastroId || activeTab !== 'historico') return;
-    void loadHistorico(cadastroId, historicoPaged.page);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [api, cadastroId, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureValidForm = () => {
     if (!form.nome.trim()) {
@@ -162,6 +166,11 @@ export const BasicoEntityFormPage = ({ title, endpoint, listRoute, singularLabel
       return false;
     }
 
+    if (form.email.trim() && !form.email.includes('@')) {
+      toast.error('Informe um e-mail válido.');
+      return false;
+    }
+
     if (form.telefone.trim() && !isValidPhone(form.telefone)) {
       toast.error('Informe um telefone válido com DDD.');
       return false;
@@ -170,97 +179,86 @@ export const BasicoEntityFormPage = ({ title, endpoint, listRoute, singularLabel
     return true;
   };
 
+  const upsertPessoa = async () => {
+    const documento = sanitizeDocument(form.documento);
+    const pessoaByDocumentResponse = await http.get<{ id?: string }>(`/api/pessoa/get/cnpjcpf/${documento}`, {
+      params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
+    });
+    const found = pessoaByDocumentResponse.data;
+    const foundId = found?.id && found.id !== EMPTY_GUID ? found.id : null;
+
+    const payload = {
+      nome: form.nome.trim(),
+      cnpjCpf: documento,
+      cidade: form.cidade.trim() || null,
+      uf: form.uf.trim() || null,
+      contatos: [{
+        nome: form.nome.trim(),
+        email: form.email.trim() || null,
+        telefone1: sanitizeDocument(form.telefone) || null,
+        telefone2: null,
+      }],
+    };
+
+    if (foundId) {
+      await http.put('/api/pessoa/update', { id: foundId, ...payload });
+      return foundId;
+    }
+
+    const createResponse = await http.post('/api/pessoa/register', payload);
+    const created = createResponse.data as Record<string, unknown>;
+    const createdId = String(created.id ?? created.Id ?? '');
+    if (!createdId) {
+      throw new Error(`Não foi possível criar a pessoa de ${singularLabel.toLowerCase()}.`);
+    }
+
+    return createdId;
+  };
+
   const onSave = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (!ensureValidForm()) {
-      return;
-    }
+    if (!ensureValidForm()) return;
 
     setSaving(true);
-
     try {
-      const payload = {
-        nome: form.nome.trim(),
-        documento: sanitizeDocument(form.documento),
-        email: form.email.trim() || null,
-        telefone: form.telefone.trim() || null,
-        cidade: form.cidade.trim() || null,
-        uf: form.uf.trim() || null,
-        ativo: form.ativo,
-      };
+      const resolvedPessoaId = await upsertPessoa();
+      setPessoaId(resolvedPessoaId);
 
       if (cadastroId) {
-        await http.put(`${endpoint}/${cadastroId}`, payload);
+        if (api.updatePath) {
+          await http.put(buildEntityPath(api, api.updatePath), {
+            id: cadastroId,
+            ...(api.supportsStatus ? { status: statusFromActive(form.ativo) } : {}),
+          });
+        }
         toast.success(`${singularLabel} atualizado(a).`);
-      } else {
-        const response = await http.post(endpoint, payload);
-        const created = response.data as { id: string };
-        toast.success(`${singularLabel} criado(a).`);
-        navigate(`${listRoute}/${created.id}`, { replace: true });
+        return;
       }
+
+      const response = isPrestador
+        ? await http.post(buildEntityPath(api, api.registerPath), (() => {
+          const data = new FormData();
+          data.append('cnpjCpf', sanitizeDocument(form.documento));
+          return data;
+        })())
+        : await http.post(buildEntityPath(api, api.registerPath), { pessoaId: resolvedPessoaId });
+      const created = response.data as Record<string, unknown>;
+      const createdId = String(created.id ?? created.Id ?? response.data ?? '');
+      if (!createdId && !isPrestador) {
+        throw new Error(`Não foi possível criar ${singularLabel.toLowerCase()}.`);
+      }
+
+      if (api.supportsStatus && api.updatePath && !form.ativo) {
+        await http.put(buildEntityPath(api, api.updatePath), { id: createdId, status: statusFromActive(false) });
+      }
+
+      toast.success(`${singularLabel} criado(a).`);
+      navigate(createdId ? `${listRoute}/${createdId}` : listRoute, { replace: true });
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
       setSaving(false);
-    }
-  };
-
-  const addAnexo = async () => {
-    if (!cadastroId || !anexoFile) {
-      toast.error('Selecione um arquivo.');
-      return;
-    }
-
-    try {
-      const data = new FormData();
-      data.append('file', anexoFile);
-      await http.post(`${endpoint}/${cadastroId}/anexos`, data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      setAnexoFile(null);
-      await loadSubTabs(cadastroId);
-      toast.success('Anexo incluído.');
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const removeAnexo = async (anexoId: string) => {
-    if (!cadastroId || !window.confirm('Remover anexo?')) return;
-
-    try {
-      await http.delete(`${endpoint}/${cadastroId}/anexos/${anexoId}`);
-      await loadSubTabs(cadastroId);
-      toast.success('Anexo removido.');
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const addObservacao = async () => {
-    if (!cadastroId || !textoObservacao.trim()) return;
-
-    try {
-      await http.post(`${endpoint}/${cadastroId}/observacoes`, { texto: textoObservacao.trim() });
-      setTextoObservacao('');
-      await loadSubTabs(cadastroId);
-      toast.success('Observação adicionada.');
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const removeObservacao = async (observacaoId: string) => {
-    if (!cadastroId || !window.confirm('Remover observação?')) return;
-
-    try {
-      await http.delete(`${endpoint}/${cadastroId}/observacoes/${observacaoId}`);
-      await loadSubTabs(cadastroId);
-      toast.success('Observação removida.');
-    } catch (error) {
-      toast.error(getErrorMessage(error));
     }
   };
 
@@ -307,8 +305,9 @@ export const BasicoEntityFormPage = ({ title, endpoint, listRoute, singularLabel
               type="checkbox"
               checked={form.ativo}
               onChange={(event) => setForm((current) => ({ ...current, ativo: event.target.checked }))}
+              disabled={!api.supportsStatus}
             />
-            <span>Registro ativo</span>
+            <span>{api.supportsStatus ? 'Registro ativo' : 'Ativo (somente visual)'}</span>
           </label>
           <label>
             <span>E-mail</span>
@@ -358,146 +357,39 @@ export const BasicoEntityFormPage = ({ title, endpoint, listRoute, singularLabel
     <section className="entity-card">
       <header>
         <h3>Complemento</h3>
-        <p>Aba preparada para regras específicas do módulo legado desta entidade.</p>
+        <p>Estrutura preservada para evolução incremental sem bloquear o cadastro principal.</p>
       </header>
-      <div className="entity-loading">Estrutura da aba pronta para integração incremental.</div>
+      <div className="entity-loading">Aba pronta para conexão com endpoints específicos.</div>
     </section>
   );
 
   const renderAnexosTab = () => (
-    <section className="entity-card entity-form-stack">
+    <section className="entity-card">
       <header>
         <h3>Anexos</h3>
+        <p>Fluxo principal migrado; integração de anexos será adicionada por entidade quando aplicável.</p>
       </header>
-      <div className="entity-grid cols-3">
-        <label>
-          <span>Arquivo</span>
-          <input type="file" onChange={(event) => setAnexoFile(event.target.files?.[0] ?? null)} />
-        </label>
-        <button type="button" className="btn-main" onClick={() => void addAnexo()}>Enviar anexo</button>
-      </div>
-
-      <section className="entity-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Arquivo</th>
-              <th>Tipo</th>
-              <th>Tamanho</th>
-              <th>Data</th>
-              <th className="col-actions">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {anexosRows.map((item) => (
-              <tr key={item.id}>
-                <td>{item.nomeArquivo}</td>
-                <td>{item.contentType}</td>
-                <td>{item.tamanhoBytes}</td>
-                <td>{formatDateTime(item.createdAt)}</td>
-                <td className="col-actions">
-                  <div className="table-actions">
-                    <button type="button" className="danger" onClick={() => void removeAnexo(item.id)}>
-                      Remover
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {anexosRows.length === 0 ? (
-              <tr>
-                <td colSpan={5}>Nenhum anexo cadastrado.</td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </section>
+      <div className="entity-loading">Sem endpoint genérico para anexos nesta entidade.</div>
     </section>
   );
 
   const renderObservacoesTab = () => (
-    <section className="entity-card entity-form-stack">
+    <section className="entity-card">
       <header>
         <h3>Observações</h3>
+        <p>Aba mantida para paridade visual do legado.</p>
       </header>
-      <div className="entity-grid cols-3">
-        <label className="full-width">
-          <span>Nova observação</span>
-          <textarea value={textoObservacao} onChange={(event) => setTextoObservacao(event.target.value)} rows={4} />
-        </label>
-        <button type="button" className="btn-main" onClick={() => void addObservacao()}>Adicionar observação</button>
-      </div>
-
-      <section className="entity-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Autor</th>
-              <th>Data</th>
-              <th>Texto</th>
-              <th className="col-actions">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {observacoesRows.map((item) => (
-              <tr key={item.id}>
-                <td>{item.autorEmail || '-'}</td>
-                <td>{formatDateTime(item.createdAt)}</td>
-                <td>{item.texto}</td>
-                <td className="col-actions">
-                  <div className="table-actions">
-                    <button type="button" className="danger" onClick={() => void removeObservacao(item.id)}>
-                      Remover
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {observacoesRows.length === 0 ? (
-              <tr>
-                <td colSpan={4}>Nenhuma observação cadastrada.</td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </section>
+      <div className="entity-loading">Sem endpoint genérico para observações nesta entidade.</div>
     </section>
   );
 
   const renderHistoricoTab = () => (
-    <section className="entity-card entity-form-stack">
+    <section className="entity-card">
       <header>
         <h3>Histórico de Auditoria</h3>
+        <p>Histórico detalhado por entidade será conectado em etapa específica.</p>
       </header>
-      <section className="entity-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Ação</th>
-              <th>Entidade</th>
-              <th>Usuário</th>
-              <th>Data</th>
-              <th>TraceId</th>
-            </tr>
-          </thead>
-          <tbody>
-            {historicoPaged.items.map((item) => (
-              <tr key={item.id}>
-                <td>{item.acao}</td>
-                <td>{item.entidade}</td>
-                <td>{item.userEmail || '-'}</td>
-                <td>{formatDateTime(item.createdAt)}</td>
-                <td className="trace-id-cell" title={item.traceId}>{item.traceId}</td>
-              </tr>
-            ))}
-            {historicoPaged.items.length === 0 ? (
-              <tr>
-                <td colSpan={5}>Sem eventos para este cadastro.</td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </section>
+      <div className="entity-loading">Aba disponível no layout para evolução incremental.</div>
     </section>
   );
 
@@ -530,6 +422,7 @@ export const BasicoEntityFormPage = ({ title, endpoint, listRoute, singularLabel
     >
       <div className="entity-meta-bar">
         <span><strong>ID:</strong> {cadastroId ?? 'novo'}</span>
+        <span><strong>Pessoa:</strong> {pessoaId ?? 'será vinculada no salvamento'}</span>
         <span><strong>Documento:</strong> {formatCpfCnpj(form.documento)}</span>
       </div>
 

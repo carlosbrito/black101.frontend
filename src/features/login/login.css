@@ -77,7 +77,8 @@
 }
 
 .login-card input[type='email'],
-.login-card input[type='password'] {
+.login-card input[type='password'],
+.login-card input[type='text'] {
   border-radius: 11px;
   border: 1px solid #bbd4ea;
   min-height: 41px;
@@ -86,7 +87,8 @@
 }
 
 .login-card input[type='email']:focus,
-.login-card input[type='password']:focus {
+.login-card input[type='password']:focus,
+.login-card input[type='text']:focus {
   border-color: #66b0e6;
   outline: none;
   box-shadow: var(--glow-accent);
@@ -117,6 +119,34 @@
 .login-card button:disabled {
   opacity: 0.72;
   cursor: not-allowed;
+}
+
+.twofa-box {
+  border: 1px solid #bbd4ea;
+  border-radius: 11px;
+  background: #f8fcff;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.twofa-label {
+  color: #2d4968;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.twofa-row {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.twofa-qrcode {
+  width: min(220px, 100%);
+  border-radius: 10px;
+  border: 1px solid #bbd4ea;
+  background: #fff;
+  padding: 0.4rem;
 }
 
 @media (max-width: 980px) {

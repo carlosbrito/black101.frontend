@@ -26,7 +26,10 @@ type AuthContextValue = {
   isSecuritizadora: boolean;
   contextEmpresas: EmpresaContextItem[];
   selectedEmpresaIds: string[];
-  login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
+  login: (email: string, password: string, rememberMe: boolean) => Promise<LoginResult>;
+  completeLegacyTwoFactor: (input: CompleteLegacyTwoFactorInput) => Promise<void>;
+  generateLegacyTwoFactorQrCode: (email: string, tipoAutenticacao2FA: TwoFactorAuthType) => Promise<string>;
+  resendLegacyTwoFactorCode: (email: string) => Promise<boolean>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
   updateContextSelection: (empresaIds: string[]) => Promise<void>;
@@ -53,6 +56,26 @@ type LegacyLoginModel = {
   qrCode?: string;
   requiresTwoFactorCode?: boolean;
   requiresTwoFactorSetup?: boolean;
+};
+
+export type TwoFactorAuthType = 1 | 2;
+
+export type LoginResult =
+  | { status: 'authenticated' }
+  | {
+      status: 'two_factor_required';
+      challenge: {
+        email: string;
+        qrCode: string;
+        requiresTwoFactorSetup: boolean;
+      };
+    };
+
+type CompleteLegacyTwoFactorInput = {
+  email: string;
+  code: string;
+  resetKey: boolean;
+  tipoAutenticacao2FA: TwoFactorAuthType;
 };
 
 type LegacyUserContext = {
@@ -146,6 +169,15 @@ const shouldFallbackToLegacyAuth = (error: unknown) => {
   return !status || status === 404 || status === 405 || status === 500;
 };
 
+const parseLegacyTwoFactorToken = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  const tokenValue = (payload as { token?: string | boolean }).token;
+  return typeof tokenValue === 'string' ? tokenValue : '';
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -216,12 +248,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [resetAuth]);
 
+  const exchangeLegacyTokenAndRefresh = useCallback(async () => {
+    const exchangedTokenResponse = await http.post<LegacyEnvelope<string>>(legacyAuthPath('gettoken'), null);
+    const exchangedToken = unwrapModel(exchangedTokenResponse.data);
+    if (typeof exchangedToken === 'string' && exchangedToken.length > 0) {
+      setLegacyAccessToken(exchangedToken);
+    }
+    await refreshMe();
+  }, [refreshMe]);
+
   const login = useCallback(async (email: string, password: string, rememberMe: boolean) => {
     try {
       await ensureCsrfToken();
       await http.post(authPath('login'), { email, password, rememberMe });
       await refreshMe();
-      return;
+      return { status: 'authenticated' } satisfies LoginResult;
     } catch (modernError) {
       if (!shouldFallbackToLegacyAuth(modernError)) {
         throw new Error(getErrorMessage(modernError));
@@ -236,24 +277,57 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
       const loginModel = unwrapModel(loginResponse.data);
       if (loginModel.requiresTwoFactorCode || loginModel.requiresTwoFactorSetup || loginModel.qrCode) {
-        throw new Error('A autenticação de dois fatores ainda não foi implementada no frontend React.');
+        return {
+          status: 'two_factor_required',
+          challenge: {
+            email,
+            qrCode: loginModel.qrCode ?? '',
+            requiresTwoFactorSetup: !!loginModel.requiresTwoFactorSetup,
+          },
+        } satisfies LoginResult;
       }
 
       if (loginModel.token) {
         setLegacyAccessToken(loginModel.token);
       }
 
-      const exchangedTokenResponse = await http.post<LegacyEnvelope<string>>(legacyAuthPath('gettoken'), null);
-      const exchangedToken = unwrapModel(exchangedTokenResponse.data);
-      if (typeof exchangedToken === 'string' && exchangedToken.length > 0) {
-        setLegacyAccessToken(exchangedToken);
-      }
-
-      await refreshMe();
+      await exchangeLegacyTokenAndRefresh();
+      return { status: 'authenticated' } satisfies LoginResult;
     } catch (legacyError) {
       throw new Error(getErrorMessage(legacyError));
     }
-  }, [refreshMe]);
+  }, [exchangeLegacyTokenAndRefresh, refreshMe]);
+
+  const completeLegacyTwoFactor = useCallback(async (input: CompleteLegacyTwoFactorInput) => {
+    const response = await http.post<LegacyEnvelope<unknown>>(legacyAuthPath('validateQrcode'), {
+      userEmail: input.email,
+      code: input.code,
+      resetKey: input.resetKey,
+      tipoAutenticacao2FA: input.tipoAutenticacao2FA,
+    });
+    const model = unwrapModel(response.data);
+    const token = parseLegacyTwoFactorToken(model);
+    if (!token) {
+      throw new Error('Código 2FA inválido.');
+    }
+
+    setLegacyAccessToken(token);
+    await exchangeLegacyTokenAndRefresh();
+  }, [exchangeLegacyTokenAndRefresh]);
+
+  const generateLegacyTwoFactorQrCode = useCallback(async (email: string, tipoAutenticacao2FA: TwoFactorAuthType) => {
+    const response = await http.get<LegacyEnvelope<{ qrCode?: string }>>(legacyAuthPath('generateQrCode'), {
+      params: { email, tipoAutenticacao2FA },
+    });
+    const model = unwrapModel(response.data);
+    return typeof model?.qrCode === 'string' ? model.qrCode : '';
+  }, []);
+
+  const resendLegacyTwoFactorCode = useCallback(async (email: string) => {
+    const response = await http.post<LegacyEnvelope<{ reenviado?: boolean }>>(legacyAuthPath('reset-totp'), { email });
+    const model = unwrapModel(response.data);
+    return !!model?.reenviado;
+  }, []);
 
   const logout = useCallback(async () => {
     try {
@@ -308,6 +382,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     contextEmpresas,
     selectedEmpresaIds,
     login,
+    completeLegacyTwoFactor,
+    generateLegacyTwoFactorQrCode,
+    resendLegacyTwoFactorCode,
     logout,
     refreshMe,
     updateContextSelection,
@@ -316,6 +393,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     contextEmpresas,
     loading,
     login,
+    completeLegacyTwoFactor,
+    generateLegacyTwoFactorQrCode,
+    resendLegacyTwoFactorCode,
     logout,
     refreshMe,
     roles,

@@ -39,6 +39,13 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     adm: [] as RecordItem[],
     age: [] as RecordItem[],
     tes: [] as RecordItem[],
+    con: [] as RecordItem[],
+    cus: [] as RecordItem[],
+    ges: [] as RecordItem[],
+    frn: [] as RecordItem[],
+    emi: [] as RecordItem[],
+    inv: [] as RecordItem[],
+    pre: [] as RecordItem[],
     ban: [] as RecordItem[],
     bac: [] as RecordItem[],
     des: [] as RecordItem[],
@@ -232,6 +239,41 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
       body: JSON.stringify({ model: 'legacy-session-token', code: 200 }),
     });
   });
+  const validateQrcodeHandler = async (route: import('@playwright/test').Route) => {
+    const body = route.request().postDataJSON() as { code?: string };
+    const isValid = String(body.code ?? '') === '123456';
+    if (isValid) {
+      state.loggedIn = true;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { token: isValid ? 'legacy-pre-token' : '' }, code: 200 }),
+    });
+  };
+  await page.route('**/authentication/validateQrcode', validateQrcodeHandler);
+  await page.route('**/api/authentication/validateQrcode', validateQrcodeHandler);
+  const generateQrCodeHandler = async (route: import('@playwright/test').Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model: { qrCode: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgUY8ailAAAAASUVORK5CYII=' },
+        code: 200,
+      }),
+    });
+  };
+  await page.route('**/authentication/generateQrCode**', generateQrCodeHandler);
+  await page.route('**/api/authentication/generateQrCode**', generateQrCodeHandler);
+  const resetTotpHandler = async (route: import('@playwright/test').Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { reenviado: true, mensagem: 'Email enviado com sucesso' }, code: 200 }),
+    });
+  };
+  await page.route('**/authentication/reset-totp', resetTotpHandler);
+  await page.route('**/api/authentication/reset-totp', resetTotpHandler);
   await page.route('**/user/get/context', async (route) => {
     if (!state.loggedIn) {
       await route.fulfill({
@@ -915,6 +957,141 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     await route.fallback();
   });
 
+  const registerPessoaEntityRoutes = (
+    apiName: string,
+    listMethod: 'GET' | 'POST',
+    bucket: RecordItem[],
+    supportsStatus = true,
+    removeMethod: 'DELETE' | 'POST' = 'DELETE',
+  ) => {
+    void page.route(`**/api/${apiName}/**`, async (route) => {
+      const url = new URL(route.request().url());
+      const method = route.request().method();
+      const path = url.pathname;
+
+      if (path === `/${apiName}/get/list` && method === listMethod) {
+        const rows = bucket.map((item) => {
+          const person = people.get(String(item.pessoaId));
+          return {
+            id: item.id,
+            status: item.status ?? 0,
+            pessoa: person
+              ? {
+                  id: person.id,
+                  nome: person.nome,
+                  cnpjCpf: person.cnpjCpf,
+                  cidade: person.cidade,
+                  uf: person.uf,
+                  contatos: person.contatos ?? [],
+                }
+              : null,
+          };
+        });
+
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(createPaged(rows)) });
+        return;
+      }
+
+      if (new RegExp(`^/${apiName}/get/unique/[^/]+$`).test(path) && method === 'GET') {
+        const id = path.split('/').pop() ?? '';
+        const found = bucket.find((item) => item.id === id);
+        if (!found) {
+          await route.fulfill({ status: 404, body: '{}' });
+          return;
+        }
+        const person = people.get(String(found.pessoaId));
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: found.id,
+            status: found.status ?? 0,
+            pessoa: person
+              ? {
+                  id: person.id,
+                  nome: person.nome,
+                  cnpjCpf: person.cnpjCpf,
+                  cidade: person.cidade,
+                  uf: person.uf,
+                  contatos: person.contatos ?? [],
+                }
+              : null,
+          }),
+        });
+        return;
+      }
+
+      if (path === `/${apiName}/register` && method === 'POST') {
+        const contentType = (await route.request().headerValue('content-type')) ?? '';
+        let pessoaId = '';
+
+        if (contentType.includes('multipart/form-data')) {
+          const body = route.request().postData() ?? '';
+          const cnpjCpfMatch = body.match(/name="cnpjCpf"\r\n\r\n([^\r\n]+)/i);
+          const person = ensurePersonByDocument(cnpjCpfMatch?.[1] ?? '');
+          pessoaId = String(person.id);
+        } else {
+          const body = route.request().postDataJSON() as { pessoaId?: string };
+          pessoaId = String(body.pessoaId ?? '');
+        }
+
+        const existing = bucket.find((item) => String(item.pessoaId) === pessoaId);
+        const id = existing?.id ?? createId();
+        if (!existing) {
+          bucket.push({
+            id,
+            pessoaId,
+            status: supportsStatus ? 0 : undefined,
+          });
+        }
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) });
+        return;
+      }
+
+      if (path === `/${apiName}/update` && method === 'PUT') {
+        const body = route.request().postDataJSON() as { id?: string; status?: number };
+        const id = String(body.id ?? '');
+        const idx = bucket.findIndex((item) => item.id === id);
+        if (idx >= 0 && supportsStatus) {
+          bucket[idx] = { ...bucket[idx], status: Number(body.status ?? 0) };
+        }
+        await route.fulfill({ status: 204, body: '' });
+        return;
+      }
+
+      if (removeMethod === 'DELETE' && new RegExp(`^/${apiName}/remove/[^/]+$`).test(path) && method === 'DELETE') {
+        const id = path.split('/').pop() ?? '';
+        const idx = bucket.findIndex((item) => item.id === id);
+        if (idx >= 0) {
+          bucket.splice(idx, 1);
+        }
+        await route.fulfill({ status: 204, body: '' });
+        return;
+      }
+
+      if (removeMethod === 'POST' && path === `/${apiName}/remove` && method === 'POST') {
+        const body = route.request().postDataJSON() as { prestadorServicoId?: string; id?: string };
+        const id = String(body.prestadorServicoId ?? body.id ?? '');
+        const idx = bucket.findIndex((item) => item.id === id);
+        if (idx >= 0) {
+          bucket.splice(idx, 1);
+        }
+        await route.fulfill({ status: 204, body: '' });
+        return;
+      }
+
+      await route.fallback();
+    });
+  };
+
+  registerPessoaEntityRoutes('consultora', 'GET', state.con, true, 'DELETE');
+  registerPessoaEntityRoutes('custodiante', 'GET', state.cus, true, 'DELETE');
+  registerPessoaEntityRoutes('gestora', 'GET', state.ges, true, 'DELETE');
+  registerPessoaEntityRoutes('fornecedor', 'GET', state.frn, true, 'DELETE');
+  registerPessoaEntityRoutes('emitente', 'POST', state.emi, false, 'DELETE');
+  registerPessoaEntityRoutes('investidor', 'GET', state.inv, false, 'DELETE');
+  registerPessoaEntityRoutes('prestadorservico', 'GET', state.pre, false, 'POST');
+
   await page.route('**/cadastros/**', async (route) => {
     if (!['xhr', 'fetch'].includes(route.request().resourceType())) {
       await route.fallback();
@@ -1538,6 +1715,39 @@ test('login com falha', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Login' })).toBeVisible();
 });
 
+test('login legado com 2fa', async ({ page }) => {
+  await page.route('**/auth/login', async (route) => {
+    await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'not found' }) });
+  });
+  await page.route('**/auth/me', async (route) => {
+    await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'not found' }) });
+  });
+  await page.route('**/api/authentication/login', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model: { requiresTwoFactorCode: true, requiresTwoFactorSetup: false, qrCode: '' },
+        code: 200,
+      }),
+    });
+  });
+  await page.route('**/api/authentication/validateQrcode', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { token: 'legacy-pre-token' }, code: 200 }),
+    });
+  });
+
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Login' }).click();
+  await expect(page.getByText('Código 2FA')).toBeVisible();
+  await page.locator('input[type="text"]').first().fill('123456');
+  await page.getByRole('button', { name: 'Validar código' }).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test('navegação do mega menu', async ({ page }, testInfo) => {
   await login(page);
   await expect(page.getByText('Portal Black101')).toBeVisible();
@@ -1616,6 +1826,39 @@ const runCrudAgentesFull = async (page: import('@playwright/test').Page, suffix:
     if (deleteCount > 0) {
       await deleteButtons.first().click();
     }
+  }
+};
+
+const runCrudBasicoPessoaFull = async (
+  page: import('@playwright/test').Page,
+  suffix: string,
+  options: {
+    listUrl: string;
+    createButton: string;
+    editedNamePrefix: string;
+  },
+) => {
+  await page.goto(options.listUrl);
+  await page.getByRole('button', { name: options.createButton }).click();
+
+  await page.locator('.modal-card label:has-text("CPF/CNPJ") input').first().fill('04.252.011/0001-10');
+  await page.getByRole('button', { name: 'Avançar' }).click();
+  await expect(page).toHaveURL(new RegExp(`${options.listUrl}/`));
+
+  await page.locator('label:has-text("Nome") input').first().fill(`${options.editedNamePrefix} ${suffix}`);
+  await page.locator('label:has-text("E-mail") input').first().fill(`basico${suffix}@mail.com`);
+  await page.locator('label:has-text("Telefone") input').first().fill('(11) 98888-0000');
+  await page.locator('label:has-text("Cidade") input').first().fill('Sao Paulo');
+  await page.locator('label:has-text("UF") input').first().fill('SP');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+
+  await page.getByRole('button', { name: 'Voltar para listagem' }).click();
+  await expect(page).toHaveURL(new RegExp(`${options.listUrl}$`));
+
+  const deleteButtons = page.getByRole('button', { name: 'Excluir' });
+  if (await deleteButtons.count()) {
+    page.on('dialog', async (dialog) => dialog.accept());
+    await deleteButtons.first().click();
   }
 };
 
@@ -1706,6 +1949,36 @@ test('crud agentes', async ({ page }) => {
   await login(page);
   const suffix = Date.now().toString().slice(-6);
   await runCrudAgentesFull(page, suffix);
+});
+
+test('crud consultoras', async ({ page }) => {
+  await login(page);
+  const suffix = Date.now().toString().slice(-6);
+  await runCrudBasicoPessoaFull(page, suffix, {
+    listUrl: '/cadastro/consultoras',
+    createButton: 'Nova consultora',
+    editedNamePrefix: 'Consultora',
+  });
+});
+
+test('crud investidores', async ({ page }) => {
+  await login(page);
+  const suffix = Date.now().toString().slice(-6);
+  await runCrudBasicoPessoaFull(page, suffix, {
+    listUrl: '/cadastro/investidores',
+    createButton: 'Novo investidor',
+    editedNamePrefix: 'Investidor',
+  });
+});
+
+test('crud prestadores', async ({ page }) => {
+  await login(page);
+  const suffix = Date.now().toString().slice(-6);
+  await runCrudBasicoPessoaFull(page, suffix, {
+    listUrl: '/cadastro/prestadores',
+    createButton: 'Novo prestador',
+    editedNamePrefix: 'Prestador',
+  });
 });
 
 test('crud bancos', async ({ page }) => {

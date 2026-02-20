@@ -18,7 +18,7 @@
 
 | Domínio | Legado (Angular) | React | Status |
 |---|---|---|---|
-| Login/autenticação | `/login` + 2FA + gettoken/context | `src/features/login/LoginPage.tsx` + `src/app/auth/AuthContext.tsx` | Parcial (2FA pendente) |
+| Login/autenticação | `/login` + 2FA + gettoken/context | `src/features/login/LoginPage.tsx` + `src/app/auth/AuthContext.tsx` | Parcial (2FA legado migrado) |
 | Cadastros | Módulo `register` | `src/features/cadastros/**` | Em andamento |
 | Operações | Módulo `operation` | `src/features/operacoes/**` | Em andamento |
 | Financeiro | Módulo `financial` | `src/features/financeiro/**` | Em andamento |
@@ -39,6 +39,7 @@
   - fallback automático de autenticação moderna para legado
   - hidratação de sessão por `/api/user/get/context` quando `/auth/me` não existe
   - fallback de troca de contexto de empresa
+  - suporte a desafio 2FA legado (`/api/authentication/validateQrcode|generateQrCode|reset-totp`)
 - `src/features/admin/AdminUsuariosPage.tsx`
   - alinhado para `/api/user/get/list` e `/api/user/register`
 - `src/features/admin/AdminRolesPage.tsx`
@@ -63,6 +64,14 @@
 - `src/features/cadastros/representantes/RepresentantesListPage.tsx`
 - `src/features/cadastros/representantes/RepresentanteFormPage.tsx`
   - alinhados para `/api/representante/get/list|get/unique|register|update|remove`
+  - criação/edição com vínculo via `/api/pessoa/get/cnpjcpf|register|update`
+- `src/features/cadastros/basicos/BasicoEntityListPage.tsx`
+- `src/features/cadastros/basicos/BasicoEntityFormPage.tsx`
+- `src/features/cadastros/basicos/entityApi.ts`
+  - consultora/custodiante/gestora/fornecedor: alinhados para `/api/{entidade}/get/list|get/unique|register|update|remove`
+  - emitente: alinhado para `/api/emitente/get/list (POST)|get/unique|register|remove`
+  - investidor: alinhado para `/api/investidor/get/list|get/unique|register|remove`
+  - prestador de serviço: alinhado para `/api/prestadorservico/get/list|get/unique|register (multipart/form-data)|remove`
   - criação/edição com vínculo via `/api/pessoa/get/cnpjcpf|register|update`
 
 ## Gaps conhecidos

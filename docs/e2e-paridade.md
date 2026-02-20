@@ -4,7 +4,8 @@
 
 1. `e2e/app.spec.ts`
 - Objetivo: regressão funcional rápida com API mockada.
-- Cobre login, navegação e CRUD principais.
+- Cobre login (incluindo cenário legado com 2FA), navegação e CRUD principais.
+- Inclui CRUD de `consultoras`, `investidores` e `prestadores` no fluxo de entidades básicas.
 - Agora compatível com:
   - `/auth/*`
   - `/api/authentication/*`
@@ -16,6 +17,13 @@
   - `/api/testemunha/*`
   - `/api/representante/*`
   - `/api/bancarizador/*`
+  - `/api/consultora/*`
+  - `/api/custodiante/*`
+  - `/api/gestora/*`
+  - `/api/fornecedor/*`
+  - `/api/emitente/*`
+  - `/api/investidor/*`
+  - `/api/prestadorservico/*`
   - `/api/banco/*`
   - `/api/despesa/*`
 

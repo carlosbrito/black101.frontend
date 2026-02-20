@@ -7,6 +7,8 @@ import { DataTable } from '../../../shared/ui/DataTable';
 import type { Column } from '../../../shared/ui/DataTable';
 import { PageFrame } from '../../../shared/ui/PageFrame';
 import { applyCpfCnpjMask, formatCpfCnpj, formatPhone, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../cadastroCommon';
+import type { BasicoEntityApi } from './entityApi';
+import { buildEntityPath } from './entityApi';
 import '../cadastro.css';
 
 type BasicoRow = {
@@ -23,7 +25,8 @@ type BasicoRow = {
 type Props = {
   title: string;
   subtitle: string;
-  endpoint: string;
+  api?: BasicoEntityApi;
+  endpoint?: string;
   routeBase: string;
   createLabel: string;
   allowAutoCadastro?: boolean;
@@ -50,6 +53,7 @@ const columns: Column<BasicoRow>[] = [
 export const BasicoEntityListPage = ({
   title,
   subtitle,
+  api,
   endpoint,
   routeBase,
   createLabel,
@@ -71,18 +75,48 @@ export const BasicoEntityListPage = ({
     setLoading(true);
 
     try {
-      const response = await http.get(endpoint, {
-        params: {
+      if (api) {
+        const filter = {
           page,
           pageSize,
-          search: search || undefined,
-        },
-      });
+          [api.searchParam]: search || undefined,
+        };
+        const response = api.listMethod === 'post'
+          ? await http.post(buildEntityPath(api, api.listPath), filter)
+          : await http.get(buildEntityPath(api, api.listPath), { params: filter });
 
-      const paged = readPagedResponse<BasicoRow>(response.data);
-      setRows(paged.items);
-      setTotalItems(paged.totalItems);
-      setTotalPages(paged.totalPages);
+        const paged = readPagedResponse<Record<string, unknown>>(response.data);
+        const mapped = paged.items.map((item) => {
+          const pessoa = (item.pessoa as Record<string, unknown> | undefined) ?? undefined;
+          const contatos = (pessoa?.contatos as Array<Record<string, unknown>> | undefined) ?? [];
+          const contato = contatos[0];
+          const documento = String((pessoa?.cnpjCpf ?? item.cnpjCpf ?? item.documento ?? '') as string);
+          const email = String((contato?.email ?? pessoa?.email ?? item.email ?? '') as string);
+          const telefone = String((contato?.telefone1 ?? contato?.telefone2 ?? pessoa?.telefone ?? item.telefone ?? '') as string);
+
+          return {
+            id: String(item.id ?? ''),
+            nome: String((pessoa?.nome ?? item.nome ?? '') as string),
+            documento,
+            email,
+            telefone,
+            cidade: String((pessoa?.cidade ?? item.cidade ?? '') as string),
+            uf: String((pessoa?.uf ?? item.uf ?? '') as string),
+            ativo: api.supportsStatus ? Number(item.status ?? 0) === 0 : true,
+          } satisfies BasicoRow;
+        });
+        setRows(mapped);
+        setTotalItems(paged.totalItems);
+        setTotalPages(paged.totalPages);
+      } else {
+        const response = await http.get(endpoint ?? '', {
+          params: { page, pageSize, search: search || undefined },
+        });
+        const paged = readPagedResponse<BasicoRow>(response.data);
+        setRows(paged.items);
+        setTotalItems(paged.totalItems);
+        setTotalPages(paged.totalPages);
+      }
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -101,7 +135,13 @@ export const BasicoEntityListPage = ({
     }
 
     try {
-      await http.delete(`${endpoint}/${row.id}`);
+      if (api?.removeMethod === 'post') {
+        await http.post(buildEntityPath(api, api.removePath), api.removeBody?.(row.id) ?? { id: row.id });
+      } else if (api) {
+        await http.delete(buildEntityPath(api, api.removePath, row.id));
+      } else {
+        await http.delete(`${endpoint}/${row.id}`);
+      }
       toast.success('Registro removido.');
       await load();
     } catch (error) {
@@ -119,6 +159,13 @@ export const BasicoEntityListPage = ({
 
     setCreating(true);
     try {
+      if (api) {
+        setDocumentModalOpen(false);
+        setDocumento('');
+        navigate(`${routeBase}/novo?documento=${doc}`);
+        return;
+      }
+
       const response = await http.post(`${endpoint}/auto-cadastro`, { documento: doc });
       const data = response.data as Record<string, unknown>;
       const id = String(data.id ?? data.Id ?? '');
