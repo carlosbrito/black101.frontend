@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../app/auth/AuthContext';
 import { CONTEXTO_EMPRESA_HEADER, getErrorMessage, http, requiresEmpresaChoice } from '../../shared/api/http';
@@ -36,6 +37,7 @@ const defaultForm: OperacaoForm = {
 };
 
 export const OperacoesPage = () => {
+  const navigate = useNavigate();
   const { contextEmpresas, selectedEmpresaIds } = useAuth();
   const [rows, setRows] = useState<OperacaoRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,15 +71,7 @@ export const OperacoesPage = () => {
   };
 
   const openEdit = (row: OperacaoRow) => {
-    setCurrent(row);
-    setForm({
-      numero: row.numero,
-      descricao: row.descricao,
-      valor: row.valor,
-      dataOperacao: row.dataOperacao?.substring(0, 10),
-      status: row.status,
-    });
-    setModalOpen(true);
+    navigate(`/operacoes/${row.id}/editar`);
   };
 
   const onSubmit = async (e: React.FormEvent) => {

@@ -36,6 +36,7 @@ import {
 } from '../../features/cadastros/CadastroPages';
 import { MovimentacoesPage } from '../../features/financeiro/MovimentacoesPage';
 import { OperacoesPage } from '../../features/operacoes/OperationsPage';
+import { OperationFormPage } from '../../features/operacoes/OperationFormPage';
 import { ImportacoesPage } from '../../features/operacoes/ImportacoesPage';
 import { WorkersPage } from '../../features/operacoes/WorkersPage';
 import { AdministradoraFormPage } from '../../features/cadastros/administradoras/AdministradoraFormPage';
@@ -153,6 +154,7 @@ export const AppRouter = () => {
           <Route path="/cadastro/testemunhas/:id" element={<TestemunhaFormPage />} />
           <Route path="/financeiro/movimentacoes" element={<MovimentacoesPage />} />
           <Route path="/operacoes" element={<OperacoesPage />} />
+          <Route path="/operacoes/:id/editar" element={<OperationFormPage />} />
           <Route path="/operacoes/importacoes" element={<ImportacoesPage />} />
           <Route path="/operacoes/workers" element={<WorkersPage />} />
 
