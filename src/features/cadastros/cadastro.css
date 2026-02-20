@@ -4,25 +4,25 @@
   align-items: stretch;
   gap: 0.6rem;
   margin-bottom: 1rem;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 0.65rem;
+  background: linear-gradient(180deg, #f9fcff 0%, #edf5ff 100%);
+  border: 1px solid rgba(150, 183, 214, 0.6);
+  border-radius: 14px;
+  padding: 0.68rem;
 }
 
 .toolbar input {
   min-width: min(260px, 100%);
   flex: 1;
-  border: 1px solid var(--line);
+  border: 1px solid #bbd4ea;
   border-radius: 10px;
   padding: 0.58rem 0.72rem;
   background: #fff;
 }
 
 .toolbar input:focus {
-  border-color: #9bb5d4;
+  border-color: #65afe5;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(95, 137, 191, 0.16);
+  box-shadow: var(--glow-accent);
 }
 
 .btn-main,
@@ -37,7 +37,7 @@
 }
 
 .btn-main {
-  background: linear-gradient(145deg, var(--brand), var(--brand-strong));
+  background: linear-gradient(135deg, var(--brand), var(--brand-strong));
   color: #fff;
 }
 
@@ -46,14 +46,14 @@
 }
 
 .btn-muted {
-  background: #f8fbff;
-  border-color: var(--line);
-  color: var(--ink);
+  background: #f4f9ff;
+  border-color: #bfd4e8;
+  color: #1a4a76;
 }
 
 .btn-muted:hover {
-  background: #eff5fc;
-  border-color: #b8c9de;
+  background: #e9f3ff;
+  border-color: #84b8e0;
 }
 
 .pager {
@@ -74,9 +74,9 @@
 
 .pager button,
 .pager select {
-  border: 1px solid var(--line);
+  border: 1px solid #bfd4e8;
   background: #fff;
-  border-radius: 8px;
+  border-radius: 9px;
   min-height: 34px;
   padding: 0.35rem 0.62rem;
 }
@@ -84,7 +84,7 @@
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 29, 46, 0.54);
+  background: rgba(8, 31, 54, 0.58);
   display: grid;
   place-items: center;
   z-index: 70;
@@ -93,10 +93,10 @@
 
 .modal-card {
   width: min(640px, 100%);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f4faff 100%);
   border-radius: 16px;
   padding: 1rem;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(139, 176, 209, 0.6);
   box-shadow: var(--shadow-strong);
 }
 
@@ -119,16 +119,16 @@
 }
 
 .form-grid input {
-  border: 1px solid var(--line);
+  border: 1px solid #bbd4ea;
   border-radius: 10px;
   min-height: 38px;
   padding: 0.5rem 0.65rem;
 }
 
 .form-grid input:focus {
-  border-color: #98b2d0;
+  border-color: #65afe5;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(95, 137, 191, 0.16);
+  box-shadow: var(--glow-accent);
 }
 
 .checkbox-row {

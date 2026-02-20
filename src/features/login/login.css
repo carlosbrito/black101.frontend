@@ -2,15 +2,19 @@
   min-height: 100vh;
   display: grid;
   grid-template-columns: minmax(320px, 1.05fr) minmax(380px, 0.95fr);
-  background: linear-gradient(90deg, #eef2f7 0%, #f4f7fb 46%, #f9fbfe 100%);
+  background:
+    radial-gradient(900px 420px at -12% -18%, rgba(50, 201, 255, 0.18), transparent 62%),
+    radial-gradient(920px 380px at 114% -14%, rgba(15, 111, 191, 0.22), transparent 64%),
+    linear-gradient(120deg, #eef4fb 0%, #f5faff 54%, #fbfdff 100%);
 }
 
 .login-brand-panel {
-  border-right: 1px solid #d4deeb;
+  border-right: 1px solid rgba(155, 183, 211, 0.62);
   display: grid;
   place-content: center;
   gap: 1rem;
   padding: 2rem;
+  background: linear-gradient(180deg, rgba(248, 253, 255, 0.88), rgba(236, 246, 255, 0.86));
 }
 
 .login-brand-mark {
@@ -23,40 +27,42 @@
   width: min(320px, 68vw);
   height: auto;
   display: block;
+  filter: drop-shadow(0 16px 30px rgba(10, 52, 88, 0.16));
 }
 
 .login-brand-copy h2 {
-  font-size: 2.1rem;
-  color: #152d4d;
+  font-size: 2.06rem;
+  color: #102f50;
   margin: 0;
 }
 
 .login-brand-copy p {
   margin: 0.4rem 0 0;
-  color: #4e617b;
+  color: #486281;
   max-width: 30ch;
-  font-size: 1.04rem;
+  font-size: 1.02rem;
 }
 
 .login-card {
   width: min(520px, 100%);
   align-self: center;
   justify-self: center;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #d6e0ec;
-  border-radius: 18px;
-  padding: 1.4rem;
-  box-shadow: 0 22px 48px rgba(13, 32, 56, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(243, 250, 255, 0.94));
+  border: 1px solid rgba(131, 175, 214, 0.54);
+  border-radius: 20px;
+  padding: 1.45rem;
+  box-shadow: 0 26px 56px rgba(11, 42, 74, 0.18);
+  backdrop-filter: blur(8px);
 }
 
 .login-card h1 {
-  color: #132947;
+  color: #0f355b;
   letter-spacing: 0.01em;
 }
 
 .login-card p {
   margin-top: 0.4rem;
-  color: var(--ink-soft);
+  color: #4b6581;
 }
 
 .login-card form {
@@ -72,17 +78,18 @@
 
 .login-card input[type='email'],
 .login-card input[type='password'] {
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  min-height: 40px;
+  border-radius: 11px;
+  border: 1px solid #bbd4ea;
+  min-height: 41px;
   padding: 0.6rem 0.7rem;
+  background: #fcfeff;
 }
 
 .login-card input[type='email']:focus,
 .login-card input[type='password']:focus {
-  border-color: #98b2d0;
+  border-color: #66b0e6;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(95, 137, 191, 0.16);
+  box-shadow: var(--glow-accent);
 }
 
 .remember-row {
@@ -93,9 +100,9 @@
 
 .login-card button {
   border: 0;
-  background: linear-gradient(140deg, var(--brand), var(--brand-strong));
+  background: linear-gradient(135deg, var(--brand), var(--brand-strong));
   color: #fff;
-  border-radius: 10px;
+  border-radius: 11px;
   padding: 0.65rem 0.8rem;
   min-height: 42px;
   font-weight: 700;
@@ -108,7 +115,7 @@
 }
 
 .login-card button:disabled {
-  opacity: 0.7;
+  opacity: 0.72;
   cursor: not-allowed;
 }
 
@@ -120,7 +127,7 @@
 
   .login-brand-panel {
     border-right: 0;
-    border-bottom: 1px solid #d4deeb;
+    border-bottom: 1px solid rgba(155, 183, 211, 0.62);
     border-radius: 16px 16px 0 0;
     place-content: start;
     grid-template-columns: auto 1fr;

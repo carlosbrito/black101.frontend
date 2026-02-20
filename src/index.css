@@ -2,23 +2,35 @@
   font-family: "Manrope", "Segoe UI", sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #101c2f;
-  --brand: #224e86;
-  --brand-strong: #163d6b;
-  --brand-soft: #edf3fb;
-  --brand-accent: #5f89bf;
-  --ink: #101c2f;
-  --ink-soft: #4c5f78;
-  --bg: #edf2f8;
+  color: #dbe9ff;
+
+  --brand: #0f6fbf;
+  --brand-strong: #0a4f8d;
+  --brand-soft: #e4f3ff;
+  --brand-accent: #32c9ff;
+
+  --ink: #0e2035;
+  --ink-soft: #4f6783;
+
+  --bg: #eef3fa;
   --surface: #ffffff;
-  --surface-2: #f6f9fd;
-  --surface-3: #eaf0f8;
-  --line: #d2dce9;
-  --line-strong: #bdcbdd;
+  --surface-2: #f4f8fd;
+  --surface-3: #eaf1f9;
+
+  --line: #cfdceb;
+  --line-strong: #afc2d9;
+
   --danger: #b42318;
   --ok: #0f766e;
-  --shadow-soft: 0 16px 38px rgba(18, 35, 59, 0.12);
-  --shadow-strong: 0 24px 56px rgba(10, 27, 52, 0.2);
+
+  --shadow-soft: 0 18px 36px rgba(7, 24, 49, 0.1);
+  --shadow-strong: 0 28px 64px rgba(7, 24, 49, 0.18);
+  --glow-accent: 0 0 0 1px rgba(50, 201, 255, 0.15), 0 0 22px rgba(50, 201, 255, 0.2);
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+
   --topbar-height: 74px;
 }
 
@@ -26,18 +38,35 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
   overflow-x: clip;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0) 35%),
-    radial-gradient(1200px 480px at 115% -20%, rgba(95, 137, 191, 0.12), transparent 62%),
-    radial-gradient(780px 420px at -10% -20%, rgba(34, 78, 134, 0.1), transparent 58%),
+    radial-gradient(980px 420px at 114% -14%, rgba(15, 111, 191, 0.17), transparent 64%),
+    radial-gradient(900px 420px at -10% -16%, rgba(50, 201, 255, 0.13), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(238, 243, 250, 0.98) 34%, rgba(231, 239, 249, 1) 100%),
     var(--bg);
   color: var(--ink);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(15, 111, 191, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 111, 191, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(90% 70% at 50% 15%, #000 62%, transparent 100%);
+  z-index: -1;
 }
 
 a {
@@ -60,6 +89,7 @@ h5,
 h6 {
   font-family: "Space Grotesk", "Manrope", sans-serif;
   margin: 0;
+  letter-spacing: 0.01em;
 }
 
 #root {
@@ -70,4 +100,16 @@ h6 {
 :focus-visible {
   outline: 2px solid var(--brand-accent);
   outline-offset: 2px;
+  box-shadow: var(--glow-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
