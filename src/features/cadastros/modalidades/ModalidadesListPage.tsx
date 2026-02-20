@@ -81,14 +81,19 @@ export const ModalidadesPage = () => {
     try {
       const response = await http.post('/api/cedente/get/list', {
         page: 1,
-        pageSize: 200,
+        pageSize: 20,
       });
       const paged = readPagedResponse<Record<string, unknown>>(response.data);
-      const options = paged.items.map((item) => ({
-        id: String(item.id ?? ''),
-        nome: String(item.nome ?? item.razaoSocial ?? ''),
-        cnpjCpf: String(item.cnpjCpf ?? ''),
-      })).filter((item) => item.id && item.nome);
+      const options = paged.items.map((item) => {
+        const pessoa = item.pessoa && typeof item.pessoa === 'object'
+          ? (item.pessoa as Record<string, unknown>)
+          : {};
+        return {
+          id: String(item.id ?? ''),
+          nome: String(item.nome ?? item.razaoSocial ?? pessoa.nome ?? ''),
+          cnpjCpf: String(item.cnpjCpf ?? pessoa.cnpjCpf ?? ''),
+        };
+      }).filter((item) => item.id && item.nome);
 
       setCedentes(options);
       if (!cedenteId && options[0]) {

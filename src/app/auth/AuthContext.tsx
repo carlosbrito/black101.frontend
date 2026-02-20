@@ -264,7 +264,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       await refreshMe();
       return { status: 'authenticated' } satisfies LoginResult;
     } catch (modernError) {
-      if (!shouldFallbackToLegacyAuth(modernError)) {
+      const isUnauthorized = axios.isAxiosError(modernError) && modernError.response?.status === 401;
+      if (!isUnauthorized && !shouldFallbackToLegacyAuth(modernError)) {
         throw new Error(getErrorMessage(modernError));
       }
     }

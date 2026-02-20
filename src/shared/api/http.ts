@@ -1,11 +1,21 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 const AUTH_BASE_PATH = import.meta.env.VITE_AUTH_BASE_PATH ?? '/auth';
 const LEGACY_AUTH_BASE_PATH = import.meta.env.VITE_LEGACY_AUTH_BASE_PATH ?? '/api/authentication';
 const CSRF_ENDPOINT = import.meta.env.VITE_CSRF_ENDPOINT ?? '';
 export const CONTEXTO_EMPRESA_HEADER = 'X-Contexto-Empresa-Id';
-let legacyAccessToken: string | null = null;
+const LEGACY_ACCESS_TOKEN_STORAGE_KEY = 'black101.legacy_access_token';
+
+const readLegacyTokenFromStorage = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return window.localStorage.getItem(LEGACY_ACCESS_TOKEN_STORAGE_KEY);
+};
+
+let legacyAccessToken: string | null = readLegacyTokenFromStorage();
 
 export const http = axios.create({
   baseURL: API_BASE_URL,
@@ -60,6 +70,17 @@ export const legacyAuthPath = (path: string) => `${LEGACY_AUTH_BASE_PATH}/${path
 
 export const setLegacyAccessToken = (token: string | null) => {
   legacyAccessToken = token;
+
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (token) {
+    window.localStorage.setItem(LEGACY_ACCESS_TOKEN_STORAGE_KEY, token);
+    return;
+  }
+
+  window.localStorage.removeItem(LEGACY_ACCESS_TOKEN_STORAGE_KEY);
 };
 
 export const getLegacyAccessToken = () => legacyAccessToken;

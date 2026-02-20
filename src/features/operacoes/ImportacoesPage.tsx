@@ -6,7 +6,7 @@ import { CONTEXTO_EMPRESA_HEADER, getErrorMessage, http, requiresEmpresaChoice }
 import { DataTable, type Column } from '../../shared/ui/DataTable';
 import { EmpresaPickerDialog } from '../../shared/ui/EmpresaPickerDialog';
 import { PageFrame } from '../../shared/ui/PageFrame';
-import { formatDateTime } from '../cadastros/cadastroCommon';
+import { formatDateTime, readPagedResponse } from '../cadastros/cadastroCommon';
 import './operations/importacoes.css';
 
 type ImportacaoItem = {
@@ -100,6 +100,24 @@ const inferTipoArquivo = (fileName: string): 'CNAB' | 'XML' | 'ZIP' => {
   if (ext === '.xml') return 'XML';
   if (ext === '.zip') return 'ZIP';
   return 'CNAB';
+};
+
+const parseModalidadeLabel = (value: unknown) => {
+  if (typeof value === 'number') {
+    return `Modalidade ${value}`;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+
+  if (value && typeof value === 'object') {
+    const row = value as Record<string, unknown>;
+    const text = row.description ?? row.descricao ?? row.name ?? row.nome ?? row.value ?? row.codigo ?? row.code;
+    return typeof text === 'string' ? text.trim() : String(text ?? '').trim();
+  }
+
+  return '';
 };
 
 const mapImportacaoItem = (raw: unknown): ImportacaoItem => {
@@ -300,15 +318,19 @@ export const ImportacoesPage = () => {
   const loadCedentesAtivos = useCallback(async () => {
     setCedentesLoading(true);
     try {
-      const response = await http.get('/cadastros/cedentes/ativos');
-      const data = Array.isArray(response.data) ? response.data : [];
-      const options = data
+      const response = await http.post('/api/cedente/get/list', {
+        page: 1,
+        pageSize: 20,
+      });
+      const paged = readPagedResponse<Record<string, unknown>>(response.data);
+      const options = paged.items
         .map((item) => {
           const row = asRecord(item);
+          const pessoa = asRecord(row.pessoa);
           return {
             id: String(readField(row, 'id', 'Id') ?? ''),
-            nome: String(readField(row, 'nome', 'Nome') ?? ''),
-            cnpjCpf: String(readField(row, 'cnpjCpf', 'CnpjCpf') ?? ''),
+            nome: String(readField(row, 'nome', 'Nome', 'razaoSocial', 'RazaoSocial') ?? readField(pessoa, 'nome', 'Nome') ?? ''),
+            cnpjCpf: String(readField(row, 'cnpjCpf', 'CnpjCpf') ?? readField(pessoa, 'cnpjCpf', 'CnpjCpf') ?? ''),
           };
         })
         .filter((item) => item.id && item.nome);
@@ -328,7 +350,7 @@ export const ImportacoesPage = () => {
   const loadBancos = useCallback(async () => {
     setBancosLoading(true);
     try {
-      const response = await http.get('/cadastros/bancos', {
+      const response = await http.get('/api/banco/get/list', {
         params: { page: 1, pageSize: 200 },
       });
       const rawPayload = asRecord(response.data);
@@ -362,22 +384,23 @@ export const ImportacoesPage = () => {
 
     setModalidadeLoading(true);
     try {
-      const response = await http.get(`/cadastros/cedentes/${cedenteId}/parametrizacao`);
+      const response = await http.get('/api/cedente/get/modalidades', {
+        params: { cedenteId },
+      });
       const rows = Array.isArray(response.data) ? response.data : [];
       const modalidades = Array.from(
         new Set(
           rows
             .map((item) => {
               const row = asRecord(item);
-              const value = readField(
+              const modalidade = readField(
                 row,
-                'modalidadeNome',
-                'ModalidadeNome',
-                // fallback para ambientes legados/mocks
                 'modalidade',
                 'Modalidade',
+                'modalidadeNome',
+                'ModalidadeNome',
               );
-              return value ? String(value).trim() : '';
+              return parseModalidadeLabel(modalidade);
             })
             .filter((item) => item.length > 0),
         ),
@@ -422,7 +445,10 @@ export const ImportacoesPage = () => {
 
   useEffect(() => {
     let cancelled = false;
-    const hubUrl = new URL('/hubs/importacoes', http.defaults.baseURL ?? window.location.origin).toString();
+    const hubBaseUrl = http.defaults.baseURL && http.defaults.baseURL.length > 0
+      ? http.defaults.baseURL
+      : window.location.origin;
+    const hubUrl = new URL('/hubs/importacoes', hubBaseUrl).toString();
     const connection = new HubConnectionBuilder()
       .withUrl(hubUrl, { withCredentials: true })
       .withAutomaticReconnect([0, 2000, 5000, 10000])
