@@ -73,8 +73,9 @@
   - investidor: alinhado para `/api/investidor/get/list|get/unique|register|remove`
   - prestador de serviço: alinhado para `/api/prestadorservico/get/list|get/unique|register (multipart/form-data)|remove`
   - criação/edição com vínculo via `/api/pessoa/get/cnpjcpf|register|update`
+- `src/features/cadastros/modalidades/ModalidadesListPage.tsx`
+  - migração para consulta real via `/api/cedente/get/list` + `/api/cedente/get/modalidades`
+  - CRUD dedicado removido (não há controller de `Modalidade` no backend atual)
 
 ## Gaps conhecidos
-- Fluxo de 2FA do legado ainda não foi migrado para React.
 - Ainda há cobertura E2E focada em API mock para muitos fluxos; backend real foi adicionado como smoke test inicial.
-- Não foi identificado controller dedicado de `Modalidade` no backend C# atual; rota permanece em investigação/mapeamento.

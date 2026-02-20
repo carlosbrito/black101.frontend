@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../../shared/api/http';
 import { DataTable } from '../../../shared/ui/DataTable';
@@ -8,47 +7,124 @@ import { PageFrame } from '../../../shared/ui/PageFrame';
 import { readPagedResponse } from '../cadastroCommon';
 import '../cadastro.css';
 
-type ModalidadeRow = {
+type CedenteOption = {
   id: string;
   nome: string;
+  cnpjCpf?: string;
+};
+
+type ModalidadeRow = {
+  id: string;
   codigo: string;
-  ativo: boolean;
+  nome: string;
+  habilitado: boolean;
+  tipoCalculoOperacao: string;
 };
 
 const columns: Column<ModalidadeRow>[] = [
-  { key: 'nome', label: 'Nome' },
   { key: 'codigo', label: 'Código' },
+  { key: 'nome', label: 'Modalidade' },
   {
-    key: 'ativo',
-    label: 'Status',
+    key: 'habilitado',
+    label: 'Habilitado',
     render: (row) => (
-      <span style={{ color: row.ativo ? 'var(--ok)' : 'var(--danger)', fontWeight: 700 }}>
-        {row.ativo ? 'Ativo' : 'Inativo'}
+      <span style={{ color: row.habilitado ? 'var(--ok)' : 'var(--danger)', fontWeight: 700 }}>
+        {row.habilitado ? 'Sim' : 'Não'}
       </span>
     ),
   },
+  { key: 'tipoCalculoOperacao', label: 'Tipo cálculo' },
 ];
 
+const toLabel = (value: unknown) =>
+  String(value ?? '')
+    .replaceAll('_', ' ')
+    .trim();
+
+const parseModalidade = (raw: unknown) => {
+  if (typeof raw === 'number') {
+    return { codigo: String(raw), nome: `Modalidade ${raw}` };
+  }
+
+  if (typeof raw === 'string') {
+    const text = raw.trim();
+    const numeric = Number(text);
+    if (!Number.isNaN(numeric) && text !== '') {
+      return { codigo: text, nome: `Modalidade ${text}` };
+    }
+
+    return { codigo: text || '-', nome: toLabel(text) || '-' };
+  }
+
+  if (raw && typeof raw === 'object') {
+    const value = raw as Record<string, unknown>;
+    const code = value.enumValue ?? value.value ?? value.codigo ?? value.code ?? '';
+    const description = value.description ?? value.descricao ?? value.name ?? value.nome ?? code ?? '';
+    return {
+      codigo: String(code || '-'),
+      nome: toLabel(description) || String(code || '-'),
+    };
+  }
+
+  return { codigo: '-', nome: '-' };
+};
+
 export const ModalidadesPage = () => {
-  const navigate = useNavigate();
+  const [cedentes, setCedentes] = useState<CedenteOption[]>([]);
+  const [cedenteId, setCedenteId] = useState('');
   const [rows, setRows] = useState<ModalidadeRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
+  const [loadingCedentes, setLoadingCedentes] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
+  const loadCedentes = async () => {
+    setLoadingCedentes(true);
     try {
-      const response = await http.get('/cadastros/modalidades', {
-        params: { page, pageSize, search: search || undefined },
+      const response = await http.post('/api/cedente/get/list', {
+        page: 1,
+        pageSize: 200,
       });
-      const paged = readPagedResponse<ModalidadeRow>(response.data);
-      setRows(paged.items);
-      setTotalItems(paged.totalItems);
-      setTotalPages(paged.totalPages);
+      const paged = readPagedResponse<Record<string, unknown>>(response.data);
+      const options = paged.items.map((item) => ({
+        id: String(item.id ?? ''),
+        nome: String(item.nome ?? item.razaoSocial ?? ''),
+        cnpjCpf: String(item.cnpjCpf ?? ''),
+      })).filter((item) => item.id && item.nome);
+
+      setCedentes(options);
+      if (!cedenteId && options[0]) {
+        setCedenteId(options[0].id);
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setLoadingCedentes(false);
+    }
+  };
+
+  const loadModalidades = async () => {
+    setLoading(true);
+    if (!cedenteId) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await http.get('/api/cedente/get/modalidades', {
+        params: { cedenteId },
+      });
+      const data = Array.isArray(response.data) ? (response.data as Array<Record<string, unknown>>) : [];
+      const mapped = data.map((item, index) => {
+        const modalidade = parseModalidade(item.modalidade ?? item.Modalidade);
+        return {
+          id: `${modalidade.codigo}-${index}`,
+          codigo: modalidade.codigo,
+          nome: modalidade.nome,
+          habilitado: Boolean(item.habilitado ?? item.Habilitado),
+          tipoCalculoOperacao: toLabel(item.tipoCalculoOperacao ?? item.TipoCalculoOperacao) || '-',
+        } satisfies ModalidadeRow;
+      });
+      setRows(mapped);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -57,80 +133,55 @@ export const ModalidadesPage = () => {
   };
 
   useEffect(() => {
-    void load();
+    void loadCedentes();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pagesLabel = useMemo(() => `${page} de ${totalPages}`, [page, totalPages]);
+  useEffect(() => {
+    void loadModalidades();
+  }, [cedenteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const removeItem = async (row: ModalidadeRow) => {
-    if (!window.confirm(`Excluir modalidade '${row.nome}'?`)) return;
-    try {
-      await http.delete(`/cadastros/modalidades/${row.id}`);
-      toast.success('Modalidade removida.');
-      await load();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
+  const selectedCedente = useMemo(
+    () => cedentes.find((item) => item.id === cedenteId) ?? null,
+    [cedentes, cedenteId],
+  );
 
   return (
     <PageFrame
       title="Cadastro de Modalidades"
-      subtitle="CRUD de modalidades para uso na parametrização de empresas."
-      actions={<button className="btn-main" onClick={() => navigate('/cadastro/modalidades/novo')}>Nova modalidade</button>}
+      subtitle="Consulta de modalidades parametrizadas por cedente no backend."
+      actions={
+        <button className="btn-muted" onClick={() => void loadModalidades()} disabled={loading || !cedenteId}>
+          Atualizar
+        </button>
+      }
     >
       <div className="toolbar">
-        <input
-          placeholder="Buscar por nome ou código"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              setPage(1);
-              void load();
-            }
-          }}
-        />
-        <button
-          className="btn-muted"
-          onClick={() => {
-            setPage(1);
-            void load();
-          }}
-        >
-          Filtrar
-        </button>
+        <label>
+          <span>Cedente</span>
+          <select
+            value={cedenteId}
+            onChange={(event) => setCedenteId(event.target.value)}
+            disabled={loadingCedentes}
+          >
+            <option value="">{loadingCedentes ? 'Carregando cedentes...' : 'Selecione um cedente'}</option>
+            {cedentes.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.nome} {item.cnpjCpf ? `(${item.cnpjCpf})` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <DataTable
         columns={columns}
         rows={rows}
         loading={loading}
-        onDelete={removeItem}
-        onEdit={(row) => navigate(`/cadastro/modalidades/${row.id}`)}
-        onDetails={(row) => navigate(`/cadastro/modalidades/${row.id}`)}
       />
 
       <div className="pager">
-        <span>{totalItems} registro(s)</span>
-        <div>
-          <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</button>
-          <span>{pagesLabel}</span>
-          <button disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Próxima</button>
-        </div>
-        <select
-          value={pageSize}
-          onChange={(event) => {
-            setPageSize(Number(event.target.value));
-            setPage(1);
-          }}
-        >
-          <option value={10}>10</option>
-          <option value={20}>20</option>
-          <option value={30}>30</option>
-          <option value={50}>50</option>
-        </select>
+        <span>{rows.length} modalidade(s)</span>
+        <span>{selectedCedente ? `Cedente selecionado: ${selectedCedente.nome}` : 'Nenhum cedente selecionado'}</span>
       </div>
     </PageFrame>
   );

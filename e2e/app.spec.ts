@@ -1092,6 +1092,45 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
   registerPessoaEntityRoutes('investidor', 'GET', state.inv, false, 'DELETE');
   registerPessoaEntityRoutes('prestadorservico', 'GET', state.pre, false, 'POST');
 
+  await page.route('**/api/cedente/**', async (route) => {
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    const path = url.pathname;
+
+    if ((path === '/cedente/get/list' || path === '/api/cedente/get/list') && method === 'POST') {
+      const rows = state.ced.map((item) => ({
+        id: item.id,
+        nome: item.nome,
+        cnpjCpf: item.cnpjCpf,
+      }));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(createPaged(rows)),
+      });
+      return;
+    }
+
+    if ((path === '/cedente/get/modalidades' || path === '/api/cedente/get/modalidades') && method === 'GET') {
+      const cedenteId = url.searchParams.get('cedenteId') ?? '';
+      const tabs = ensureCedenteTabs(cedenteId);
+      const parametrizacao = Array.isArray(tabs.parametrizacao) ? tabs.parametrizacao : [];
+      const rows = parametrizacao.map((item) => ({
+        modalidade: String((item as Record<string, unknown>).modalidadeNome ?? 'DUPLICATA'),
+        habilitado: true,
+        tipoCalculoOperacao: 'PRAZO',
+      }));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(rows),
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
   await page.route('**/cadastros/**', async (route) => {
     if (!['xhr', 'fetch'].includes(route.request().resourceType())) {
       await route.fallback();
@@ -1739,6 +1778,23 @@ test('login legado com 2fa', async ({ page }) => {
       body: JSON.stringify({ model: { token: 'legacy-pre-token' }, code: 200 }),
     });
   });
+  await page.route('**/api/user/get/context', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model: {
+          id: '1',
+          nome: 'Administrador Black101',
+          email: 'admin@black101.local',
+          fidcs: [{ id: '00000000-0000-0000-0000-000000000001', nome: 'FIDC Seed', cnpjCpf: '12345678000199' }],
+          roles: ['ADMIN'],
+          claims: ['CAD_ADM_L'],
+        },
+        code: 200,
+      }),
+    });
+  });
 
   await page.goto('/login');
   await page.getByRole('button', { name: 'Login' }).click();
@@ -1969,6 +2025,17 @@ test('crud investidores', async ({ page }) => {
     createButton: 'Novo investidor',
     editedNamePrefix: 'Investidor',
   });
+});
+
+test('modalidades por cedente', async ({ page }, testInfo) => {
+  await login(page);
+  await page.goto('/cadastro/modalidades');
+  await expect(page.locator('.toolbar select')).toBeVisible();
+  if (testInfo.project.name.includes('mobile')) {
+    await expect(page.locator('.table-mobile-cards').getByText('DUPLICATA').first()).toBeVisible();
+  } else {
+    await expect(page.getByRole('cell', { name: 'DUPLICATA' }).first()).toBeVisible();
+  }
 });
 
 test('crud prestadores', async ({ page }) => {

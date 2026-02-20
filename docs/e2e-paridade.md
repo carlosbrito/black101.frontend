@@ -4,7 +4,7 @@
 
 1. `e2e/app.spec.ts`
 - Objetivo: regressão funcional rápida com API mockada.
-- Cobre login (incluindo cenário legado com 2FA), navegação e CRUD principais.
+- Cobre login (incluindo cenário legado com 2FA), navegação, CRUD principais e consulta de modalidades por cedente.
 - Inclui CRUD de `consultoras`, `investidores` e `prestadores` no fluxo de entidades básicas.
 - Agora compatível com:
   - `/auth/*`
