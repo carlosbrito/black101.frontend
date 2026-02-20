@@ -92,15 +92,40 @@ const asRecord = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>;
 };
 
-export const readPagedResponse = <T>(value: unknown): PagedResponse<T> => {
+const unwrapEnvelope = (value: unknown): Record<string, unknown> => {
   const data = asRecord(value);
+  if ('model' in data && (('success' in data) || ('code' in data) || ('errors' in data))) {
+    return asRecord(data.model);
+  }
+
+  return data;
+};
+
+export const readPagedResponse = <T>(value: unknown): PagedResponse<T> => {
+  const data = unwrapEnvelope(value);
+  const items =
+    (data.items as T[] | undefined) ??
+    (data.Items as T[] | undefined) ??
+    (data.records as T[] | undefined) ??
+    (data.Records as T[] | undefined) ??
+    [];
+  const page = Number(data.page ?? data.Page ?? data.currentPage ?? data.CurrentPage ?? 1);
+  const pageSize = Number(data.pageSize ?? data.PageSize ?? data.limit ?? data.Limit ?? 10);
+  const totalItems = Number(data.totalItems ?? data.TotalItems ?? data.total ?? data.Total ?? items.length);
+  const totalPages = Number(
+    data.totalPages ??
+      data.TotalPages ??
+      data.pages ??
+      data.Pages ??
+      Math.max(1, Math.ceil((Number.isFinite(totalItems) ? totalItems : items.length) / Math.max(pageSize, 1))),
+  );
 
   return {
-    items: (data.items as T[] | undefined) ?? [],
-    page: Number(data.page ?? 1),
-    pageSize: Number(data.pageSize ?? 10),
-    totalItems: Number(data.totalItems ?? 0),
-    totalPages: Number(data.totalPages ?? 1),
+    items,
+    page,
+    pageSize,
+    totalItems,
+    totalPages,
   };
 };
 

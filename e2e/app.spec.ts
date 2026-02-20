@@ -87,6 +87,17 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
         { id: createId(), status: 'FINALIZADO_FALHA', message: 'Falha de validação de linhas.', createdAt: '2026-02-18T08:01:00Z' },
       ],
     }],
+    users: [{
+      id: createId(),
+      nomeCompleto: 'Administrador Black101',
+      email: 'admin@black101.local',
+      ativo: true,
+    }],
+    roles: [{
+      id: createId(),
+      nome: 'ADMIN',
+      ativo: true,
+    }],
   };
   const cedenteTabs = new Map<string, Record<string, RecordItem | RecordItem[]>>();
   const ensureCedenteTabs = (cedenteId: string) => {
@@ -117,7 +128,7 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     { id: createId(), cedenteId: seededCedenteId, modalidadeNome: 'CCB' },
   ];
 
-  await page.route('**/auth/csrf', async (route) => {
+  const csrfHandler = async (route: import('@playwright/test').Route) => {
     await route.fulfill({
       status: 200,
       headers: {
@@ -126,9 +137,9 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
       },
       body: JSON.stringify({ token: 'mocked-token' }),
     });
-  });
+  };
 
-  await page.route('**/auth/login', async (route) => {
+  const loginHandler = async (route: import('@playwright/test').Route) => {
     const data = route.request().postDataJSON() as { password: string };
     if (data.password !== 'Master@5859') {
       await route.fulfill({
@@ -140,10 +151,14 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     }
 
     state.loggedIn = true;
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'ok' }) });
-  });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'ok', model: { token: 'legacy-pre-token' }, code: 200 }),
+    });
+  };
 
-  await page.route('**/auth/me', async (route) => {
+  const meHandler = async (route: import('@playwright/test').Route) => {
     if (!state.loggedIn) {
       await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ detail: 'não autenticado' }) });
       return;
@@ -158,11 +173,101 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
         claims: ['CAD_ADM_L'],
       }),
     });
-  });
+  };
 
-  await page.route('**/auth/logout', async (route) => {
+  const logoutHandler = async (route: import('@playwright/test').Route) => {
     state.loggedIn = false;
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'ok' }) });
+  };
+
+  await page.route('**/auth/csrf', csrfHandler);
+  await page.route('**/auth/login', loginHandler);
+  await page.route('**/auth/me', meHandler);
+  await page.route('**/auth/logout', logoutHandler);
+
+  await page.route('**/authentication/login', loginHandler);
+  await page.route('**/authentication/logout', logoutHandler);
+  await page.route('**/authentication/gettoken', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: 'legacy-session-token', code: 200 }),
+    });
+  });
+  await page.route('**/user/get/context', async (route) => {
+    if (!state.loggedIn) {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'não autenticado' }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model: {
+          id: '1',
+          nome: 'Administrador Black101',
+          email: 'admin@black101.local',
+          fidcs: [
+            { id: '00000000-0000-0000-0000-000000000001', nome: 'FIDC Seed', cnpjCpf: '12345678000199' },
+          ],
+          roles: ['ADMIN'],
+          claims: ['CAD_ADM_L'],
+        },
+        code: 200,
+      }),
+    });
+  });
+
+  await page.route('**/user/get/list**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(createPaged(state.users)),
+    });
+  });
+
+  await page.route('**/user/register', async (route) => {
+    const body = route.request().postDataJSON() as { pessoaId?: string; email?: string };
+    state.users.push({
+      id: createId(),
+      nomeCompleto: `Usuário ${String(body.pessoaId ?? '').slice(0, 6) || 'Novo'}`,
+      email: body.email ?? `user${Date.now()}@black101.local`,
+      ativo: true,
+    });
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: createId() }),
+    });
+  });
+
+  await page.route('**/grupo/get/list**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(createPaged(state.roles)),
+    });
+  });
+
+  await page.route('**/grupo/register', async (route) => {
+    const body = route.request().postDataJSON() as { nome?: string };
+    state.roles.push({
+      id: createId(),
+      nome: body.nome ?? 'NOVO_PERFIL',
+      ativo: true,
+    });
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: createId() }),
+    });
   });
 
   await page.route('**/cadastros/**', async (route) => {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../shared/api/http';
 import { PageFrame } from '../../shared/ui/PageFrame';
+import { readPagedResponse } from '../cadastros/cadastroCommon';
 
 type RoleItem = { id: string; nome: string };
 type ApiRoleItem = { id?: string; Id?: string; nome?: string; Nome?: string };
@@ -11,8 +12,9 @@ export const AdminRolesPage = () => {
 
   const list = async () => {
     try {
-      const response = await http.get<ApiRoleItem[]>('/admin/roles');
-      setRoles(response.data.map((item) => ({ id: String(item.id ?? item.Id), nome: String(item.nome ?? item.Nome ?? '') })));
+      const response = await http.get('/grupo/get/list', { params: { page: 1, pageSize: 100 } });
+      const paged = readPagedResponse<ApiRoleItem>(response.data);
+      setRoles(paged.items.map((item) => ({ id: String(item.id ?? item.Id), nome: String(item.nome ?? item.Nome ?? '') })));
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -23,7 +25,12 @@ export const AdminRolesPage = () => {
     if (!nome) return;
 
     try {
-      await http.post('/admin/roles', { nome });
+      await http.post('/grupo/register', {
+        nome,
+        descricao: nome,
+        statusAtivo: true,
+        grupoClaims: [],
+      });
       toast.success('Perfil criado.');
       await list();
     } catch (error) {

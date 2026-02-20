@@ -25,10 +25,31 @@ npm run e2e
 ```bash
 # .env.local
 VITE_API_BASE_URL=https://localhost:7110
+VITE_AUTH_BASE_PATH=/auth
+VITE_LEGACY_AUTH_BASE_PATH=/authentication
+VITE_CSRF_ENDPOINT=/auth/csrf
 ```
 
+## Compatibilidade de autenticação
+
+- Fluxo moderno: `VITE_AUTH_BASE_PATH` (padrão `/auth`)
+- Fluxo legado/backend C#: `VITE_LEGACY_AUTH_BASE_PATH` (padrão `/authentication`)
+- CSRF é opcional. Se não houver endpoint CSRF no backend, deixe `VITE_CSRF_ENDPOINT` vazio.
+
+## E2E com backend real
+
+```bash
+# exemplo
+PLAYWRIGHT_REAL_BACKEND=1 \
+E2E_LOGIN_EMAIL=usuario@dominio.com \
+E2E_LOGIN_PASSWORD=senha \
+npm run e2e -- e2e/backend-real.spec.ts
+```
+
+- Sem essas variáveis, o teste real é automaticamente ignorado.
+
 ## Implementado
-- Login com fluxo cookie-based (sem localStorage/sessionStorage para token/claims)
+- Login com compatibilidade para fluxo cookie-based e fluxo legado com bearer em memória
 - Mega menu horizontal responsivo com estrutura completa do legado
 - CRUD paginado para:
   - Administradoras

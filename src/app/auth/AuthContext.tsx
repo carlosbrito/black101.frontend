@@ -1,5 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ensureCsrfToken, getErrorMessage, http } from '../../shared/api/http';
+import axios from 'axios';
+import {
+  authPath,
+  ensureCsrfToken,
+  getErrorMessage,
+  getLegacyAccessToken,
+  http,
+  legacyAuthPath,
+  setLegacyAccessToken,
+} from '../../shared/api/http';
 import {
   SegmentoEmpresa,
   type AuthMeResponse,
@@ -25,6 +34,118 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+type LegacyError = {
+  key?: string;
+  value?: string;
+};
+
+type LegacyEnvelope<T> = {
+  model?: T;
+  code?: number;
+  success?: boolean;
+  errors?: LegacyError[];
+  detail?: string;
+  message?: string;
+};
+
+type LegacyLoginModel = {
+  token?: string;
+  qrCode?: string;
+  requiresTwoFactorCode?: boolean;
+  requiresTwoFactorSetup?: boolean;
+};
+
+type LegacyUserContext = {
+  id?: string;
+  userId?: string;
+  nome?: string;
+  name?: string;
+  email?: string;
+  roles?: string[];
+  claims?: string[];
+  fidcs?: Array<{
+    id: string;
+    nome?: string;
+    name?: string;
+    cnpjCpf?: string;
+  }>;
+};
+
+const unwrapModel = <T,>(payload: LegacyEnvelope<T> | T): T => {
+  if (payload && typeof payload === 'object' && 'model' in (payload as LegacyEnvelope<T>)) {
+    return (payload as LegacyEnvelope<T>).model as T;
+  }
+
+  return payload as T;
+};
+
+const decodeJwtPayload = (token: string): Record<string, unknown> | null => {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) {
+      return null;
+    }
+
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = `${base64}${'='.repeat((4 - (base64.length % 4)) % 4)}`;
+    const json = atob(padded);
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
+const extractClaimsFromJwt = (payload: Record<string, unknown> | null): string[] => {
+  if (!payload) {
+    return [];
+  }
+
+  const ignored = new Set(['aud', 'exp', 'iss', 'nbf', 'iat', 'nameid', 'unique_name', 'sub', 'email', 'name']);
+  return Object.entries(payload)
+    .filter(([key, value]) => !ignored.has(key) && value !== null && value !== false && value !== 'False')
+    .map(([key]) => key);
+};
+
+const parseSegmentoEmpresa = (payload: Record<string, unknown> | null): SegmentoEmpresa => {
+  const raw = payload?.SegmentoEmpresa;
+  const numeric = Number(raw);
+  if (Number.isNaN(numeric)) {
+    return SegmentoEmpresa.Fidc;
+  }
+
+  return (numeric as SegmentoEmpresa) ?? SegmentoEmpresa.Fidc;
+};
+
+const parseSelectedEmpresaIdsFromJwt = (payload: Record<string, unknown> | null): string[] => {
+  const raw = payload?.FidcContextoRazao;
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    return [];
+  }
+
+  return raw
+    .split(/[;,]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+};
+
+const mapLegacyEmpresas = (context: LegacyUserContext): EmpresaContextItem[] => {
+  return (context.fidcs ?? []).map((item) => ({
+    id: item.id,
+    nome: item.nome ?? item.name ?? item.id,
+    documento: item.cnpjCpf ?? null,
+  }));
+};
+
+const shouldFallbackToLegacyAuth = (error: unknown) => {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+
+  const status = error.response?.status;
+  return !status || status === 404 || status === 405 || status === 500;
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -45,38 +166,123 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const refreshMe = useCallback(async () => {
     try {
-      const response = await http.get<AuthMeResponse>('/auth/me');
+      const response = await http.get<AuthMeResponse>(authPath('me'));
       setUser(response.data.user);
       setRoles(response.data.roles);
       setClaims(response.data.claims);
       setSegmentoEmpresa(response.data.segmentoEmpresa ?? SegmentoEmpresa.Fidc);
       setContextEmpresas(response.data.contextoEmpresas?.empresasDisponiveis ?? []);
       setSelectedEmpresaIds(response.data.contextoEmpresas?.empresasSelecionadasIds ?? []);
+      return;
+    } catch (modernError) {
+      const canFallbackFrom401 =
+        axios.isAxiosError(modernError) && modernError.response?.status === 401 && !!getLegacyAccessToken();
+      if (!canFallbackFrom401 && !shouldFallbackToLegacyAuth(modernError)) {
+        resetAuth();
+        return;
+      }
+    }
+
+    try {
+      const legacyContextResponse = await http.get<LegacyEnvelope<LegacyUserContext>>('/user/get/context');
+      const legacyContext = unwrapModel(legacyContextResponse.data);
+      const tokenPayload = decodeJwtPayload(getLegacyAccessToken() ?? '');
+
+      const mappedUser: AuthUser = {
+        id: legacyContext.id ?? legacyContext.userId ?? 'legacy-user',
+        name: legacyContext.nome ?? legacyContext.name ?? legacyContext.email ?? 'Usuário',
+        email: legacyContext.email ?? '',
+      };
+
+      const mappedRoles = legacyContext.roles ?? [];
+      const mappedClaims = legacyContext.claims ?? extractClaimsFromJwt(tokenPayload);
+      const mappedEmpresas = mapLegacyEmpresas(legacyContext);
+      const selectedByToken = parseSelectedEmpresaIdsFromJwt(tokenPayload);
+      const normalizedSelected =
+        selectedByToken.length > 0
+          ? selectedByToken
+          : mappedEmpresas.length === 1
+            ? [mappedEmpresas[0].id]
+            : [];
+
+      setUser(mappedUser);
+      setRoles(mappedRoles);
+      setClaims(mappedClaims);
+      setSegmentoEmpresa(parseSegmentoEmpresa(tokenPayload));
+      setContextEmpresas(mappedEmpresas);
+      setSelectedEmpresaIds(normalizedSelected);
     } catch {
       resetAuth();
     }
   }, [resetAuth]);
 
   const login = useCallback(async (email: string, password: string, rememberMe: boolean) => {
-    await ensureCsrfToken();
-    await http.post('/auth/login', { email, password, rememberMe });
-    await refreshMe();
+    try {
+      await ensureCsrfToken();
+      await http.post(authPath('login'), { email, password, rememberMe });
+      await refreshMe();
+      return;
+    } catch (modernError) {
+      if (!shouldFallbackToLegacyAuth(modernError)) {
+        throw new Error(getErrorMessage(modernError));
+      }
+    }
+
+    try {
+      const loginResponse = await http.post<LegacyEnvelope<LegacyLoginModel>>(legacyAuthPath('login'), {
+        email,
+        password,
+        rememberMe,
+      });
+      const loginModel = unwrapModel(loginResponse.data);
+      if (loginModel.requiresTwoFactorCode || loginModel.requiresTwoFactorSetup || loginModel.qrCode) {
+        throw new Error('A autenticação de dois fatores ainda não foi implementada no frontend React.');
+      }
+
+      if (loginModel.token) {
+        setLegacyAccessToken(loginModel.token);
+      }
+
+      const exchangedTokenResponse = await http.post<LegacyEnvelope<string>>(legacyAuthPath('gettoken'), null);
+      const exchangedToken = unwrapModel(exchangedTokenResponse.data);
+      if (typeof exchangedToken === 'string' && exchangedToken.length > 0) {
+        setLegacyAccessToken(exchangedToken);
+      }
+
+      await refreshMe();
+    } catch (legacyError) {
+      throw new Error(getErrorMessage(legacyError));
+    }
   }, [refreshMe]);
 
   const logout = useCallback(async () => {
     try {
       await ensureCsrfToken();
-      await http.post('/auth/logout');
-    } catch (error) {
-      throw new Error(getErrorMessage(error));
+      await http.post(authPath('logout'));
+    } catch (modernError) {
+      if (shouldFallbackToLegacyAuth(modernError)) {
+        await http.post(legacyAuthPath('logout'), null);
+      } else {
+        throw new Error(getErrorMessage(modernError));
+      }
     } finally {
+      setLegacyAccessToken(null);
       resetAuth();
     }
   }, [resetAuth]);
 
   const updateContextSelection = useCallback(async (empresaIds: string[]) => {
-    await ensureCsrfToken();
-    await http.put('/contexto/empresas/selecao', { empresaIds });
+    try {
+      await ensureCsrfToken();
+      await http.put('/contexto/empresas/selecao', { empresaIds });
+    } catch (modernError) {
+      if (!shouldFallbackToLegacyAuth(modernError)) {
+        throw modernError;
+      }
+
+      await http.put('/fidc/contexto/set', empresaIds);
+    }
+
     await refreshMe();
   }, [refreshMe]);
 
