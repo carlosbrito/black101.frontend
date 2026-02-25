@@ -6,9 +6,9 @@ import { getErrorMessage, http } from '../../../shared/api/http';
 import type { PagedResponse } from '../../../shared/types/paging';
 import { PageFrame } from '../../../shared/ui/PageFrame';
 import {
-  DebentureStatusResgate,
+  DebentureModoResgate,
   DebentureTipoResgate,
-  debentureStatusResgateLabel,
+  debentureModoResgateLabel,
   debentureTipoResgateLabel,
   type DebentureComprovanteDto,
   type DebentureResgateDto,
@@ -19,31 +19,51 @@ import '../../cadastros/administradoras/entity-form.css';
 
 type ResgateFormState = {
   debentureVendaId: string;
+  modoResgate: DebentureModoResgate;
   tipoResgate: DebentureTipoResgate;
   quantidadeResgatada: string;
   valorResgateMonetario: string;
   valorRendimento: string;
   valorIr: string;
+  valorIof: string;
   dataSolicitacao: string;
-  status: DebentureStatusResgate;
   observacoes: string;
 };
 
 const emptyForm: ResgateFormState = {
   debentureVendaId: '',
+  modoResgate: DebentureModoResgate.Quantidade,
   tipoResgate: DebentureTipoResgate.Parcial,
   quantidadeResgatada: '',
   valorResgateMonetario: '',
   valorRendimento: '',
   valorIr: '',
+  valorIof: '0',
   dataSolicitacao: '',
-  status: DebentureStatusResgate.Solicitado,
   observacoes: '',
 };
 
 const toDateInput = (value?: string | null) => (value ? value.slice(0, 10) : '');
+const toTodayDateInput = () => {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+};
 
-const toDecimal = (value: string) => Number(value.replace(',', '.'));
+const toDecimal = (value: string) => {
+  if (!value.trim()) return 0;
+  const trimmed = value.trim();
+  if (!trimmed.includes(',')) {
+    const parsedDirect = Number(trimmed);
+    return Number.isFinite(parsedDirect) ? parsedDirect : 0;
+  }
+
+  const normalized = trimmed.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const quantityFormatter = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 6 });
 
 export const DebentureResgateFormPage = () => {
   const params = useParams<{ id: string }>();
@@ -54,7 +74,7 @@ export const DebentureResgateFormPage = () => {
   const [loading, setLoading] = useState<boolean>(isEdit);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
-  const [form, setForm] = useState<ResgateFormState>(emptyForm);
+  const [form, setForm] = useState<ResgateFormState>(() => ({ ...emptyForm, dataSolicitacao: isEdit ? '' : toTodayDateInput() }));
   const [vendas, setVendas] = useState<DebentureVendaDto[]>([]);
   const [comprovante, setComprovante] = useState<DebentureComprovanteDto | null>(null);
 
@@ -83,13 +103,14 @@ export const DebentureResgateFormPage = () => {
         const resgate = response.data;
         setForm({
           debentureVendaId: resgate.debentureVendaId,
+          modoResgate: resgate.modoResgate,
           tipoResgate: resgate.tipoResgate,
           quantidadeResgatada: String(resgate.quantidadeResgatada),
           valorResgateMonetario: String(resgate.valorResgateMonetario),
           valorRendimento: String(resgate.valorRendimento),
           valorIr: String(resgate.valorIr),
+          valorIof: String(resgate.valorIof),
           dataSolicitacao: toDateInput(resgate.dataSolicitacao),
-          status: resgate.status,
           observacoes: resgate.observacoes ?? '',
         });
 
@@ -111,18 +132,39 @@ export const DebentureResgateFormPage = () => {
     void bootstrap();
   }, [resgateId]);
 
+  const selectedVenda = useMemo(
+    () => vendas.find((item) => item.id === form.debentureVendaId),
+    [vendas, form.debentureVendaId],
+  );
+
+  useEffect(() => {
+    if (isEdit || !selectedVenda) return;
+    setForm((prev) => ({
+      ...prev,
+      valorRendimento: String(selectedVenda.valorRendimentoAtual ?? 0),
+      valorIr: '0',
+    }));
+  }, [selectedVenda, isEdit]);
+
+  const isModoQuantidade = form.modoResgate === DebentureModoResgate.Quantidade;
+
   const ensureValid = () => {
     if (!form.debentureVendaId) {
       toast.error('Selecione a venda.');
       return false;
     }
 
-    if (Number(form.quantidadeResgatada) <= 0) {
-      toast.error('Quantidade resgatada inválida.');
+    if (isModoQuantidade) {
+      if (Number(form.quantidadeResgatada) <= 0) {
+        toast.error('Quantidade resgatada inválida.');
+        return false;
+      }
+    } else if (toDecimal(form.valorResgateMonetario) <= 0) {
+      toast.error('Valor de resgate monetário inválido.');
       return false;
     }
 
-    if (toDecimal(form.valorResgateMonetario) < 0 || toDecimal(form.valorRendimento) < 0 || toDecimal(form.valorIr) < 0) {
+    if (toDecimal(form.valorResgateMonetario) < 0 || toDecimal(form.valorRendimento) < 0 || toDecimal(form.valorIr) < 0 || toDecimal(form.valorIof) < 0) {
       toast.error('Valores de resgate inválidos.');
       return false;
     }
@@ -142,13 +184,14 @@ export const DebentureResgateFormPage = () => {
 
     const payload = {
       debentureVendaId: form.debentureVendaId,
+      modoResgate: Number(form.modoResgate),
       tipoResgate: Number(form.tipoResgate),
-      quantidadeResgatada: Number(form.quantidadeResgatada),
-      valorResgateMonetario: toDecimal(form.valorResgateMonetario),
+      quantidadeResgatada: isModoQuantidade ? Number(form.quantidadeResgatada) : 0,
+      valorResgateMonetario: isModoQuantidade ? 0 : toDecimal(form.valorResgateMonetario),
       valorRendimento: toDecimal(form.valorRendimento),
       valorIr: toDecimal(form.valorIr),
+      valorIof: toDecimal(form.valorIof),
       dataSolicitacao: form.dataSolicitacao,
-      status: Number(form.status),
       observacoes: form.observacoes.trim() || null,
     };
 
@@ -190,10 +233,32 @@ export const DebentureResgateFormPage = () => {
     }
   };
 
-  const selectedVenda = useMemo(
-    () => vendas.find((item) => item.id === form.debentureVendaId),
-    [vendas, form.debentureVendaId],
-  );
+  const quantidadeSolicitadaEstimada = useMemo(() => {
+    if (!selectedVenda) return 0;
+    if (isModoQuantidade) return Number(form.quantidadeResgatada) || 0;
+    const valorMonetario = toDecimal(form.valorResgateMonetario);
+    if (selectedVenda.valorUnitario <= 0 || valorMonetario <= 0) return 0;
+    return valorMonetario / selectedVenda.valorUnitario;
+  }, [selectedVenda, isModoQuantidade, form.quantidadeResgatada, form.valorResgateMonetario]);
+
+  const saldoQuantidade = useMemo(() => {
+    if (!selectedVenda) return 0;
+    return selectedVenda.quantidadeVendida - quantidadeSolicitadaEstimada;
+  }, [selectedVenda, quantidadeSolicitadaEstimada]);
+
+  const valorResgateSolicitado = useMemo(() => {
+    if (!selectedVenda) return 0;
+    if (isModoQuantidade) {
+      const quantidade = Number(form.quantidadeResgatada) || 0;
+      return quantidade * selectedVenda.valorUnitario;
+    }
+    return toDecimal(form.valorResgateMonetario);
+  }, [selectedVenda, isModoQuantidade, form.quantidadeResgatada, form.valorResgateMonetario]);
+
+  const saldoMonetario = useMemo(() => {
+    if (!selectedVenda) return 0;
+    return selectedVenda.valorTotal - valorResgateSolicitado;
+  }, [selectedVenda, valorResgateSolicitado]);
 
   if (loading) {
     return (
@@ -213,8 +278,17 @@ export const DebentureResgateFormPage = () => {
         <section className="entity-card">
           <header>
             <h3>Dados do Resgate</h3>
-            <p>Preencha as informações de resgate unitário/monetário.</p>
+            <p>Escolha o modo de solicitação e preencha apenas o campo correspondente.</p>
           </header>
+
+          <div className="entity-meta-bar">
+            <span><strong>Modo:</strong> {debentureModoResgateLabel[form.modoResgate]}</span>
+            <span><strong>Quantidade Total da Venda:</strong> {quantityFormatter.format(selectedVenda?.quantidadeVendida ?? 0)}</span>
+            <span><strong>Resgate Solicitado (estimado):</strong> {quantityFormatter.format(quantidadeSolicitadaEstimada)}</span>
+            <span><strong>Saldo em Quantidade:</strong> {quantityFormatter.format(saldoQuantidade)}</span>
+            <span><strong>Valor Total da Venda:</strong> {currencyFormatter.format(selectedVenda?.valorTotal ?? 0)}</span>
+            <span><strong>Saldo Monetário:</strong> {currencyFormatter.format(saldoMonetario)}</span>
+          </div>
 
           <div className="entity-grid cols-3">
             <label>
@@ -227,42 +301,71 @@ export const DebentureResgateFormPage = () => {
               </select>
             </label>
 
-            <label>
-              <span>Tipo de Resgate</span>
-              <select value={Number(form.tipoResgate)} onChange={(event) => setForm((prev) => ({ ...prev, tipoResgate: Number(event.target.value) as DebentureTipoResgate }))}>
-                {Object.entries(debentureTipoResgateLabel).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
+            <label className="span-all">
+              <span>Modo de Resgate (escolha uma opção)</span>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {Object.entries(debentureModoResgateLabel).map(([value, label]) => (
+                  <label key={value} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="radio"
+                      name="modoResgate"
+                      value={value}
+                      checked={Number(form.modoResgate) === Number(value)}
+                      onChange={() => {
+                        const modo = Number(value) as DebentureModoResgate;
+                        setForm((prev) => ({
+                          ...prev,
+                          modoResgate: modo,
+                          quantidadeResgatada: modo === DebentureModoResgate.Quantidade ? prev.quantidadeResgatada : '',
+                          valorResgateMonetario: modo === DebentureModoResgate.Monetario ? prev.valorResgateMonetario : '',
+                        }));
+                      }}
+                    />
+                    {label}
+                  </label>
                 ))}
-              </select>
-            </label>
-
-            <label>
-              <span>Status</span>
-              <select value={Number(form.status)} onChange={(event) => setForm((prev) => ({ ...prev, status: Number(event.target.value) as DebentureStatusResgate }))}>
-                {Object.entries(debentureStatusResgateLabel).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
+              </div>
             </label>
 
             <label>
               <span>Quantidade Resgatada</span>
-              <input type="number" min="1" step="1" value={form.quantidadeResgatada} onChange={(event) => setForm((prev) => ({ ...prev, quantidadeResgatada: event.target.value }))} required />
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={form.quantidadeResgatada}
+                onChange={(event) => setForm((prev) => ({ ...prev, quantidadeResgatada: event.target.value }))}
+                required={isModoQuantidade}
+                disabled={!isModoQuantidade}
+              />
             </label>
 
             <label>
               <span>Valor Resgate Monetário</span>
-              <input type="number" min="0" step="0.01" value={form.valorResgateMonetario} onChange={(event) => setForm((prev) => ({ ...prev, valorResgateMonetario: event.target.value }))} required />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.valorResgateMonetario}
+                onChange={(event) => setForm((prev) => ({ ...prev, valorResgateMonetario: event.target.value }))}
+                required={!isModoQuantidade}
+                disabled={isModoQuantidade}
+              />
             </label>
 
             <label>
               <span>Valor Rendimento</span>
-              <input type="number" min="0" step="0.01" value={form.valorRendimento} onChange={(event) => setForm((prev) => ({ ...prev, valorRendimento: event.target.value }))} required />
+              <input type="text" value={currencyFormatter.format(toDecimal(form.valorRendimento))} readOnly />
             </label>
 
             <label>
               <span>Valor IR</span>
-              <input type="number" min="0" step="0.01" value={form.valorIr} onChange={(event) => setForm((prev) => ({ ...prev, valorIr: event.target.value }))} required />
+              <input type="text" value={currencyFormatter.format(toDecimal(form.valorIr))} readOnly />
+            </label>
+
+            <label>
+              <span>Valor IOF</span>
+              <input type="number" min="0" step="0.01" value={form.valorIof} onChange={(event) => setForm((prev) => ({ ...prev, valorIof: event.target.value }))} required />
             </label>
 
             <label>
@@ -271,8 +374,12 @@ export const DebentureResgateFormPage = () => {
             </label>
 
             <label>
-              <span>Venda Selecionada</span>
-              <input value={selectedVenda ? `${selectedVenda.investidorNome} (${selectedVenda.investidorDocumento})` : '-'} disabled />
+              <span>Tipo de Resgate</span>
+              <select value={Number(form.tipoResgate)} onChange={(event) => setForm((prev) => ({ ...prev, tipoResgate: Number(event.target.value) as DebentureTipoResgate }))}>
+                {Object.entries(debentureTipoResgateLabel).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
             </label>
 
             <label className="span-all">

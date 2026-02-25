@@ -16,6 +16,17 @@ export const DebentureRendimentosPage = () => {
       const response = await http.post<DebentureJobDto>('/securitizadora/debentures/rendimentos/recalcular', { tipo });
       setLastJob(response.data);
       toast.success(response.data.mensagem || 'Solicitação enviada para processamento.');
+
+      try {
+        const workerResponse = await http.get<{ status: number }>('/workers/debenture-rendimento-cdi');
+        const workerStatus = workerResponse.data?.status;
+        const isRunning = workerStatus === 1 || workerStatus === 3;
+        if (!isRunning) {
+          toast('Job enfileirado. O worker de rendimento está parado; inicie em Operações > Workers.');
+        }
+      } catch {
+        // best effort: o recálculo já foi enfileirado
+      }
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {

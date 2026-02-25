@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { legacyMenu } from './menuConfig';
 import { useAuth } from '../auth/AuthContext';
@@ -134,19 +134,21 @@ const filterImplementedMenuGroups = (groups: MenuGroup[]): MenuGroup[] =>
     .filter((group) => group.childrens.length > 0 || (group.complementaryItems?.length ?? 0) > 0);
 
 export const MainLayout = () => {
-  const { isSecuritizadora, contextEmpresas, selectedEmpresaIds, updateContextSelection } = useAuth();
+  const { isSecuritizadora, contextEmpresas, selectedEmpresaIds, updateContextSelection, logout } = useAuth();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [fundPickerOpen, setFundPickerOpen] = useState(false);
   const [pendingSelection, setPendingSelection] = useState<string[]>([]);
   const [savingSelection, setSavingSelection] = useState(false);
   const [panelOffsetByGroup, setPanelOffsetByGroup] = useState<Record<string, number>>({});
+  const [loggingOut, setLoggingOut] = useState(false);
   const navRef = useRef<HTMLElement | null>(null);
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const contextRef = useRef<HTMLDivElement | null>(null);
   const closeMenuTimerRef = useRef<number | null>(null);
   const topbarRef = useRef<HTMLElement | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const menuGroups = useMemo(
     () =>
@@ -305,6 +307,18 @@ export const MainLayout = () => {
       toast.error(getErrorMessage(error));
     } finally {
       setSavingSelection(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await logout();
+      navigate('/login', { replace: true });
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setLoggingOut(false);
     }
   };
 
@@ -580,6 +594,14 @@ export const MainLayout = () => {
           <Link to="/admin/usuarios" className="shortcut-profile-btn">
             <span>Perfil</span>
           </Link>
+          <button
+            type="button"
+            className="shortcut-profile-btn shortcut-logout-btn"
+            onClick={() => void handleLogout()}
+            disabled={loggingOut}
+          >
+            <span>{loggingOut ? 'Saindo...' : 'Sair'}</span>
+          </button>
         </div>
       </section>
 

@@ -6,15 +6,17 @@ import type { PagedResponse } from '../../../shared/types/paging';
 import { DataTable } from '../../../shared/ui/DataTable';
 import type { Column } from '../../../shared/ui/DataTable';
 import { PageFrame } from '../../../shared/ui/PageFrame';
-import { debentureStatusResgateLabel, debentureTipoResgateLabel, type DebentureResgateDto } from './types';
+import { debentureModoResgateLabel, debentureStatusResgateLabel, debentureTipoResgateLabel, type DebentureResgateDto } from './types';
 import '../../cadastros/cadastro.css';
 
 const columns: Column<DebentureResgateDto>[] = [
   { key: 'debentureVendaId', label: 'Venda', render: (row) => row.debentureVendaId.slice(0, 8).toUpperCase() },
+  { key: 'modoResgate', label: 'Modo', render: (row) => debentureModoResgateLabel[row.modoResgate] ?? '-' },
   { key: 'tipoResgate', label: 'Tipo', render: (row) => debentureTipoResgateLabel[row.tipoResgate] ?? '-' },
   { key: 'quantidadeResgatada', label: 'Qtde' },
   { key: 'valorResgateMonetario', label: 'Valor Resgate', render: (row) => row.valorResgateMonetario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
   { key: 'valorRendimento', label: 'Rendimento', render: (row) => row.valorRendimento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+  { key: 'valorIof', label: 'IOF', render: (row) => row.valorIof.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
   { key: 'dataSolicitacao', label: 'Data', render: (row) => new Date(row.dataSolicitacao).toLocaleDateString() },
   { key: 'status', label: 'Status', render: (row) => debentureStatusResgateLabel[row.status] ?? '-' },
 ];

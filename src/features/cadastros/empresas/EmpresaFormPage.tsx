@@ -28,8 +28,16 @@ type FormState = {
   telefone: string;
   cidade: string;
   uf: string;
+  segmentoEmpresa: string;
   ativo: boolean;
 };
+
+const segmentoEmpresaOptions = [
+  { value: '0', label: 'FIDC' },
+  { value: '1', label: 'Securitizadora' },
+  { value: '2', label: 'Factoring' },
+  { value: '3', label: 'Outros' },
+];
 
 type ModalidadeDto = { id: string; nome: string; codigo: string; ativo: boolean };
 type ParamForm = Record<string, string | boolean>;
@@ -228,6 +236,7 @@ export const EmpresaFormPage = () => {
     telefone: '',
     cidade: '',
     uf: '',
+    segmentoEmpresa: '',
     ativo: true,
   });
   const [anexosRows, setAnexosRows] = useState<CadastroArquivoDto[]>([]);
@@ -301,6 +310,7 @@ export const EmpresaFormPage = () => {
           telefone: applyPhoneMask(item.telefone ?? ''),
           cidade: item.cidade ?? '',
           uf: item.uf ?? '',
+          segmentoEmpresa: item.segmentoEmpresa === null || item.segmentoEmpresa === undefined ? '' : String(item.segmentoEmpresa),
           ativo: item.ativo,
         });
         await loadSubTabs(cadastroId);
@@ -332,6 +342,10 @@ export const EmpresaFormPage = () => {
       toast.error('Informe um telefone válido com DDD.');
       return false;
     }
+    if (!form.segmentoEmpresa) {
+      toast.error('Selecione o segmento da empresa.');
+      return false;
+    }
     return true;
   };
 
@@ -348,6 +362,7 @@ export const EmpresaFormPage = () => {
         telefone: form.telefone.trim() || null,
         cidade: form.cidade.trim() || null,
         uf: form.uf.trim() || null,
+        segmentoEmpresa: Number(form.segmentoEmpresa),
         ativo: form.ativo,
       };
 
@@ -514,6 +529,13 @@ export const EmpresaFormPage = () => {
           <label><span>Telefone</span><input value={form.telefone} onChange={(event) => setForm((c) => ({ ...c, telefone: applyPhoneMask(event.target.value) }))} /></label>
           <label><span>Cidade</span><input value={form.cidade} onChange={(event) => setForm((c) => ({ ...c, cidade: event.target.value }))} /></label>
           <label><span>UF</span><input maxLength={2} value={form.uf} onChange={(event) => setForm((c) => ({ ...c, uf: event.target.value.toUpperCase() }))} /></label>
+          <label>
+            <span>Segmento</span>
+            <select value={form.segmentoEmpresa} onChange={(event) => setForm((c) => ({ ...c, segmentoEmpresa: event.target.value }))} required>
+              <option value="">Selecione...</option>
+              {segmentoEmpresaOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          </label>
         </div>
       </section>
       <div className="entity-actions">

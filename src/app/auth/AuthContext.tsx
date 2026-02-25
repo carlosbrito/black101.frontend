@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ensureCsrfToken, getErrorMessage, http } from '../../shared/api/http';
+import { ensureCsrfToken, http } from '../../shared/api/http';
 import {
   SegmentoEmpresa,
   type AuthMeResponse,
@@ -67,8 +67,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       await ensureCsrfToken();
       await http.post('/auth/logout');
-    } catch (error) {
-      throw new Error(getErrorMessage(error));
+    } catch {
+      // A sessão local sempre deve ser encerrada no frontend, mesmo se o backend já tiver invalidado o cookie.
     } finally {
       resetAuth();
     }

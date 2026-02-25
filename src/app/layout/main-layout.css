@@ -699,6 +699,16 @@
   filter: brightness(1.06);
 }
 
+.shortcut-logout-btn {
+  cursor: pointer;
+  font: inherit;
+}
+
+.shortcut-logout-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
 .mobile-toggle {
   display: none;
   border: 1px solid #c6d9eb;

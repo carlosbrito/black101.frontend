@@ -63,7 +63,7 @@ export const DebentureEmissoesPage = () => {
   return (
     <PageFrame
       title="Emissão de Debêntures"
-      subtitle="Cadastro de emissão, séries e escritura."
+      subtitle="Cadastro de emissão e séries."
       actions={<button className="btn-main" onClick={() => navigate('/securitizadora/debentures/emissoes/novo')}>Nova Emissão</button>}
     >
       <div className="toolbar">

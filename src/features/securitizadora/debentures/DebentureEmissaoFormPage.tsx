@@ -10,13 +10,12 @@ import {
   debentureIndiceTipoLabel,
   debentureStatusEmissaoLabel,
   type DebentureEmissaoDetailsDto,
-  type DebentureEscrituraDto,
   type DebentureSerieDto,
 } from './types';
 import '../../cadastros/cadastro.css';
 import '../../cadastros/administradoras/entity-form.css';
 
-type TabKey = 'emissao' | 'series' | 'escritura';
+type TabKey = 'emissao' | 'series';
 
 type EmissaoFormState = {
   numeroEmissao: string;
@@ -34,18 +33,8 @@ type SerieFormState = {
   indice: DebentureIndiceTipo;
   taxa: string;
   quantidade: string;
-  valorUnitario: string;
   dataVencimento: string;
   ativa: boolean;
-};
-
-type EscrituraFormState = {
-  numeroInstrumento: string;
-  dataAssinatura: string;
-  localAssinatura: string;
-  agenteFiduciario: string;
-  textoLivre: string;
-  templateWordNome: string;
 };
 
 const emptyEmissaoForm: EmissaoFormState = {
@@ -63,24 +52,18 @@ const emptySerieForm: SerieFormState = {
   indice: DebentureIndiceTipo.Cdi,
   taxa: '',
   quantidade: '',
-  valorUnitario: '',
   dataVencimento: '',
   ativa: true,
-};
-
-const emptyEscrituraForm: EscrituraFormState = {
-  numeroInstrumento: '',
-  dataAssinatura: '',
-  localAssinatura: '',
-  agenteFiduciario: '',
-  textoLivre: '',
-  templateWordNome: '',
 };
 
 const toDateInput = (value?: string | null) => (value ? value.slice(0, 10) : '');
 
 const toDecimal = (value: string) => Number(value.replace(',', '.'));
 const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const quantityFormatter = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 6,
+});
 
 const maskCurrencyInput = (value: string) => {
   const digits = value.replace(/\D/g, '');
@@ -114,10 +97,8 @@ export const DebentureEmissaoFormPage = () => {
   const [loading, setLoading] = useState<boolean>(isEdit);
   const [saving, setSaving] = useState(false);
   const [seriesLoading, setSeriesLoading] = useState(false);
-  const [escrituraSaving, setEscrituraSaving] = useState(false);
   const [emissaoForm, setEmissaoForm] = useState<EmissaoFormState>(emptyEmissaoForm);
   const [serieForm, setSerieForm] = useState<SerieFormState>(emptySerieForm);
-  const [escrituraForm, setEscrituraForm] = useState<EscrituraFormState>(emptyEscrituraForm);
   const [series, setSeries] = useState<DebentureSerieDto[]>([]);
 
   const canAccessSubTabs = isEdit;
@@ -132,16 +113,7 @@ export const DebentureEmissaoFormPage = () => {
       status: data.status,
       observacoes: data.observacoes ?? '',
     });
-
     setSeries(data.series ?? []);
-    setEscrituraForm({
-      numeroInstrumento: data.escritura?.numeroInstrumento ?? '',
-      dataAssinatura: toDateInput(data.escritura?.dataAssinatura ?? undefined),
-      localAssinatura: data.escritura?.localAssinatura ?? '',
-      agenteFiduciario: data.escritura?.agenteFiduciario ?? '',
-      textoLivre: data.escritura?.textoLivre ?? '',
-      templateWordNome: data.escritura?.templateWordNome ?? '',
-    });
   };
 
   const load = async () => {
@@ -169,7 +141,17 @@ export const DebentureEmissaoFormPage = () => {
     }
 
     return Math.floor(valorTotal / valorPu);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [emissaoForm.valorTotal, emissaoForm.valorPu]);
+
+  const quantidadeTotalCalculadaDisplay = useMemo(() => {
+    const valorTotal = parseCurrencyToDecimal(emissaoForm.valorTotal);
+    const valorPu = parseCurrencyToDecimal(emissaoForm.valorPu);
+    if (valorTotal <= 0 || valorPu <= 0) {
+      return '0';
+    }
+
+    return quantityFormatter.format(valorTotal / valorPu);
+  }, [emissaoForm.valorTotal, emissaoForm.valorPu]);
 
   const ensureEmissaoValid = () => {
     if (!emissaoForm.numeroEmissao.trim()) {
@@ -260,8 +242,8 @@ export const DebentureEmissaoFormPage = () => {
       return false;
     }
 
-    if (toDecimal(serieForm.valorUnitario) <= 0) {
-      toast.error('Valor unitário inválido.');
+    if (parseCurrencyToDecimal(emissaoForm.valorPu) <= 0) {
+      toast.error('Valor do PU da emissão inválido.');
       return false;
     }
 
@@ -303,7 +285,7 @@ export const DebentureEmissaoFormPage = () => {
       indice: Number(serieForm.indice),
       taxa: toDecimal(serieForm.taxa),
       quantidade: quantidadeSerie,
-      valorUnitario: toDecimal(serieForm.valorUnitario),
+      valorUnitario: parseCurrencyToDecimal(emissaoForm.valorPu),
       dataVencimento: serieForm.dataVencimento,
       ativa: serieForm.ativa,
     };
@@ -331,7 +313,6 @@ export const DebentureEmissaoFormPage = () => {
       indice: serie.indice,
       taxa: String(serie.taxa),
       quantidade: String(serie.quantidade),
-      valorUnitario: String(serie.valorUnitario),
       dataVencimento: toDateInput(serie.dataVencimento),
       ativa: serie.ativa,
     });
@@ -350,36 +331,6 @@ export const DebentureEmissaoFormPage = () => {
       await refreshSeries();
     } catch (error) {
       toast.error(getErrorMessage(error));
-    }
-  };
-
-  const onSaveEscritura = async (event: FormEvent) => {
-    event.preventDefault();
-
-    if (!emissaoId) {
-      toast.error('Salve a emissão antes de editar a escritura.');
-      return;
-    }
-
-    setEscrituraSaving(true);
-    try {
-      const payload: DebentureEscrituraDto = {
-        debentureEmissaoId: emissaoId,
-        numeroInstrumento: escrituraForm.numeroInstrumento.trim() || null,
-        dataAssinatura: escrituraForm.dataAssinatura || null,
-        localAssinatura: escrituraForm.localAssinatura.trim() || null,
-        agenteFiduciario: escrituraForm.agenteFiduciario.trim() || null,
-        textoLivre: escrituraForm.textoLivre.trim() || null,
-        templateWordNome: escrituraForm.templateWordNome.trim() || null,
-      };
-
-      await http.put(`/securitizadora/debentures/emissoes/${emissaoId}/escritura`, payload);
-      toast.success('Escritura atualizada.');
-      await load();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setEscrituraSaving(false);
     }
   };
 
@@ -408,7 +359,7 @@ export const DebentureEmissaoFormPage = () => {
   return (
     <PageFrame
       title={pageTitle}
-      subtitle="Tela cheia com abas para emissão, séries e escritura da debênture."
+      subtitle="Tela cheia com abas para emissão e séries da debênture."
       actions={<Link className="btn-muted" to="/securitizadora/debentures/emissoes">Voltar para listagem</Link>}
     >
       {isEdit ? (
@@ -421,7 +372,6 @@ export const DebentureEmissaoFormPage = () => {
       <div className="entity-tabs" role="tablist" aria-label="Abas do cadastro de emissão">
         <button type="button" className={`entity-tab-btn ${activeTab === 'emissao' ? 'is-active' : ''}`} onClick={() => changeTab('emissao')}>Emissão</button>
         <button type="button" className={`entity-tab-btn ${activeTab === 'series' ? 'is-active' : ''}`} onClick={() => changeTab('series')} disabled={!canAccessSubTabs}>Séries</button>
-        <button type="button" className={`entity-tab-btn ${activeTab === 'escritura' ? 'is-active' : ''}`} onClick={() => changeTab('escritura')} disabled={!canAccessSubTabs}>Escritura</button>
       </div>
 
       {activeTab === 'emissao' ? (
@@ -446,7 +396,7 @@ export const DebentureEmissaoFormPage = () => {
                 <input type="date" value={emissaoForm.dataEmissao} onChange={(event) => setEmissaoForm((prev) => ({ ...prev, dataEmissao: event.target.value }))} required />
               </label>
               <label>
-                <span>Valor Total</span>
+                <span>Valor Monetario total da emissão</span>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -469,7 +419,7 @@ export const DebentureEmissaoFormPage = () => {
               </label>
               <label>
                 <span>Quantidade Total (calculada)</span>
-                <input type="text" value={quantidadeTotalCalculada.toString()} readOnly />
+                <input type="text" value={quantidadeTotalCalculadaDisplay} readOnly />
               </label>
               <label>
                 <span>Status</span>
@@ -516,15 +466,22 @@ export const DebentureEmissaoFormPage = () => {
               </label>
               <label>
                 <span>Taxa (%)</span>
-                <input type="number" min="0" step="0.000001" value={serieForm.taxa} onChange={(event) => setSerieForm((prev) => ({ ...prev, taxa: event.target.value }))} required />
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  maxLength={3}
+                  value={serieForm.taxa}
+                  onChange={(event) => setSerieForm((prev) => ({ ...prev, taxa: event.target.value.slice(0, 3) }))}
+                  required
+                />
               </label>
               <label>
                 <span>Quantidade (automática)</span>
-                <input type="text" value={(serieForm.id ? Number(serieForm.quantidade) : quantidadeTotalCalculada).toString()} readOnly />
+                <input type="text" value={quantityFormatter.format(serieForm.id ? Number(serieForm.quantidade) : quantidadeTotalCalculada)} readOnly />
               </label>
               <label>
                 <span>Valor Unitário</span>
-                <input type="number" min="0" step="0.01" value={serieForm.valorUnitario} onChange={(event) => setSerieForm((prev) => ({ ...prev, valorUnitario: event.target.value }))} required />
+                <input type="text" value={emissaoForm.valorPu} readOnly />
               </label>
               <label>
                 <span>Vencimento</span>
@@ -595,47 +552,6 @@ export const DebentureEmissaoFormPage = () => {
         </div>
       ) : null}
 
-      {activeTab === 'escritura' ? (
-        <form className="entity-form-stack" onSubmit={onSaveEscritura}>
-          <section className="entity-card">
-            <header>
-              <h3>Escritura da Debênture</h3>
-              <p>Formulário da escritura para geração de documentos e comprovantes.</p>
-            </header>
-
-            <div className="entity-grid cols-3">
-              <label>
-                <span>Número do Instrumento</span>
-                <input value={escrituraForm.numeroInstrumento} onChange={(event) => setEscrituraForm((prev) => ({ ...prev, numeroInstrumento: event.target.value }))} />
-              </label>
-              <label>
-                <span>Data da Assinatura</span>
-                <input type="date" value={escrituraForm.dataAssinatura} onChange={(event) => setEscrituraForm((prev) => ({ ...prev, dataAssinatura: event.target.value }))} />
-              </label>
-              <label>
-                <span>Local da Assinatura</span>
-                <input value={escrituraForm.localAssinatura} onChange={(event) => setEscrituraForm((prev) => ({ ...prev, localAssinatura: event.target.value }))} />
-              </label>
-              <label>
-                <span>Agente Fiduciário</span>
-                <input value={escrituraForm.agenteFiduciario} onChange={(event) => setEscrituraForm((prev) => ({ ...prev, agenteFiduciario: event.target.value }))} />
-              </label>
-              <label>
-                <span>Template Word</span>
-                <input value={escrituraForm.templateWordNome} onChange={(event) => setEscrituraForm((prev) => ({ ...prev, templateWordNome: event.target.value }))} />
-              </label>
-              <label className="span-all">
-                <span>Texto Livre</span>
-                <textarea value={escrituraForm.textoLivre} onChange={(event) => setEscrituraForm((prev) => ({ ...prev, textoLivre: event.target.value }))} />
-              </label>
-            </div>
-          </section>
-
-          <div className="entity-actions">
-            <button type="submit" className="btn-main" disabled={escrituraSaving}>{escrituraSaving ? 'Salvando...' : 'Salvar Escritura'}</button>
-          </div>
-        </form>
-      ) : null}
     </PageFrame>
   );
 };

@@ -9,13 +9,25 @@ import { PageFrame } from '../../../shared/ui/PageFrame';
 import { debentureStatusVendaLabel, type DebentureVendaDto } from './types';
 import '../../cadastros/cadastro.css';
 
+const formatCurrency = (value?: number | null) =>
+  Number(value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('pt-BR');
+};
+
 const columns: Column<DebentureVendaDto>[] = [
   { key: 'investidorNome', label: 'Investidor' },
-  { key: 'investidorDocumento', label: 'Documento' },
   { key: 'quantidadeVendida', label: 'Qtde Vendida' },
   { key: 'quantidadeResgatada', label: 'Qtde Resgatada' },
-  { key: 'valorTotal', label: 'Valor Total', render: (row) => row.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+  { key: 'valorTotal', label: 'Valor Total', render: (row) => formatCurrency(row.valorTotal) },
+  { key: 'valorRendimentoAtual', label: 'Rendimento', render: (row) => formatCurrency(row.valorRendimentoAtual) },
+  { key: 'valorIrAtual', label: 'Valor IR', render: (row) => formatCurrency(row.valorIrAtual) },
+  { key: 'valorIofAtual', label: 'Valor IOF', render: (row) => formatCurrency(row.valorIofAtual) },
   { key: 'dataVenda', label: 'Data Venda', render: (row) => new Date(row.dataVenda).toLocaleDateString() },
+  { key: 'dataHoraUltimaAtualizacao', label: 'Dt. e hora da Última atualização', render: (row) => formatDateTime(row.dataHoraUltimaAtualizacao) },
   { key: 'status', label: 'Status', render: (row) => debentureStatusVendaLabel[row.status] ?? '-' },
 ];
 
@@ -68,7 +80,7 @@ export const DebentureVendasPage = () => {
     >
       <div className="toolbar">
         <input
-          placeholder="Buscar por investidor, documento ou comprovante"
+          placeholder="Buscar por investidor ou comprovante"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           onKeyDown={(event) => {

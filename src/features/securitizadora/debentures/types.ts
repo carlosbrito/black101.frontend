@@ -20,6 +20,11 @@ export enum DebentureTipoResgate {
   Total = 2,
 }
 
+export enum DebentureModoResgate {
+  Quantidade = 1,
+  Monetario = 2,
+}
+
 export enum DebentureStatusResgate {
   Solicitado = 1,
   Aprovado = 2,
@@ -40,17 +45,6 @@ export type DebentureSerieDto = {
   ativa: boolean;
 };
 
-export type DebentureEscrituraDto = {
-  id?: string;
-  debentureEmissaoId: string;
-  numeroInstrumento?: string | null;
-  dataAssinatura?: string | null;
-  localAssinatura?: string | null;
-  agenteFiduciario?: string | null;
-  textoLivre?: string | null;
-  templateWordNome?: string | null;
-};
-
 export type DebentureEmissaoListDto = {
   id: string;
   numeroEmissao: string;
@@ -66,7 +60,6 @@ export type DebentureEmissaoListDto = {
 export type DebentureEmissaoDetailsDto = DebentureEmissaoListDto & {
   observacoes?: string | null;
   series: DebentureSerieDto[];
-  escritura?: DebentureEscrituraDto | null;
 };
 
 export type DebentureVendaDto = {
@@ -80,7 +73,10 @@ export type DebentureVendaDto = {
   valorUnitario: number;
   valorTotal: number;
   valorRendimentoAtual: number;
+  valorIrAtual: number;
+  valorIofAtual: number;
   dataVenda: string;
+  dataHoraUltimaAtualizacao: string;
   status: DebentureStatusVenda;
   comprovanteNumero?: string | null;
   comprovanteEnviadoCertificadora: boolean;
@@ -89,11 +85,13 @@ export type DebentureVendaDto = {
 export type DebentureResgateDto = {
   id: string;
   debentureVendaId: string;
+  modoResgate: DebentureModoResgate;
   tipoResgate: DebentureTipoResgate;
   quantidadeResgatada: number;
   valorResgateMonetario: number;
   valorRendimento: number;
   valorIr: number;
+  valorIof: number;
   dataSolicitacao: string;
   status: DebentureStatusResgate;
   comprovanteNumero?: string | null;
@@ -142,4 +140,9 @@ export const debentureIndiceTipoLabel: Record<number, string> = {
 export const debentureTipoResgateLabel: Record<number, string> = {
   [DebentureTipoResgate.Parcial]: 'Parcial',
   [DebentureTipoResgate.Total]: 'Total',
+};
+
+export const debentureModoResgateLabel: Record<number, string> = {
+  [DebentureModoResgate.Quantidade]: 'Por Quantidade',
+  [DebentureModoResgate.Monetario]: 'Por Resgate Monetário',
 };

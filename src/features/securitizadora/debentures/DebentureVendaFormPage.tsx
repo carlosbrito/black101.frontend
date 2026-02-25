@@ -5,10 +5,9 @@ import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../../shared/api/http';
 import type { PagedResponse } from '../../../shared/types/paging';
 import { PageFrame } from '../../../shared/ui/PageFrame';
-import { applyCpfCnpjMask, isValidCpfCnpj, sanitizeDocument } from '../../cadastros/cadastroCommon';
+import { formatCpfCnpj, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../../cadastros/cadastroCommon';
 import {
   DebentureStatusVenda,
-  debentureStatusVendaLabel,
   type DebentureComprovanteDto,
   type DebentureEmissaoListDto,
   type DebentureSerieDto,
@@ -40,8 +39,34 @@ const emptyForm: VendaFormState = {
 };
 
 const toDateInput = (value?: string | null) => (value ? value.slice(0, 10) : '');
+const toTodayDateInput = () => {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+};
 
-const toDecimal = (value: string) => Number(value.replace(',', '.'));
+const toDecimal = (value: string) => {
+  if (!value.trim()) return 0;
+  const normalized = value.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+const decimalFormatter = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 6 });
+const formatDecimalDisplay = (value?: number | string | null) => {
+  if (value === null || value === undefined || value === '') return '';
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return '';
+  return decimalFormatter.format(parsed);
+};
+
+type InvestidorRow = {
+  id: string;
+  nome: string;
+  documento?: string | null;
+  ativo: boolean;
+};
 
 export const DebentureVendaFormPage = () => {
   const params = useParams<{ id: string }>();
@@ -52,10 +77,13 @@ export const DebentureVendaFormPage = () => {
   const [loading, setLoading] = useState<boolean>(isEdit);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
-  const [form, setForm] = useState<VendaFormState>(emptyForm);
+  const [form, setForm] = useState<VendaFormState>(() => ({ ...emptyForm, dataVenda: isEdit ? '' : toTodayDateInput() }));
   const [emissoes, setEmissoes] = useState<DebentureEmissaoListDto[]>([]);
   const [series, setSeries] = useState<DebentureSerieDto[]>([]);
   const [comprovante, setComprovante] = useState<DebentureComprovanteDto | null>(null);
+  const [investidores, setInvestidores] = useState<InvestidorRow[]>([]);
+  const [investidoresLoading, setInvestidoresLoading] = useState(false);
+  const [selectedInvestidorId, setSelectedInvestidorId] = useState('');
 
   const loadEmissoes = async () => {
     try {
@@ -86,8 +114,30 @@ export const DebentureVendaFormPage = () => {
       setSeries([]);
     }
   };
+
+  const loadInvestidores = async () => {
+    setInvestidoresLoading(true);
+    try {
+      const response = await http.get('/cadastros/investidores', {
+        params: {
+          page: 1,
+          pageSize: 100,
+        },
+      });
+      const paged = readPagedResponse<InvestidorRow>(response.data);
+      setInvestidores((paged.items ?? []).filter((item) => item.ativo));
+    } catch {
+      setInvestidores([]);
+    } finally {
+      setInvestidoresLoading(false);
+    }
+  };
+
   useEffect(() => {
     void loadEmissoes();
+  }, []);
+  useEffect(() => {
+    void loadInvestidores();
   }, []);
   useEffect(() => {
     const bootstrap = async () => {
@@ -101,9 +151,9 @@ export const DebentureVendaFormPage = () => {
           debentureEmissaoId: venda.debentureEmissaoId,
           debentureSerieId: venda.debentureSerieId,
           investidorNome: venda.investidorNome,
-          investidorDocumento: applyCpfCnpjMask(venda.investidorDocumento),
+          investidorDocumento: venda.investidorDocumento,
           quantidadeVendida: String(venda.quantidadeVendida),
-          valorUnitario: String(venda.valorUnitario),
+          valorUnitario: formatDecimalDisplay(venda.valorUnitario),
           dataVenda: toDateInput(venda.dataVenda),
           status: venda.status,
         });
@@ -129,11 +179,27 @@ export const DebentureVendaFormPage = () => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isEdit) return;
+    void loadSeries(form.debentureEmissaoId);
+  }, [form.debentureEmissaoId, isEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    if (form.debentureEmissaoId) {
-      void loadSeries(form.debentureEmissaoId);
+  useEffect(() => {
+    if (isEdit) return;
+    const selectedSerie = series.find((item) => item.id === form.debentureSerieId);
+    setForm((prev) => ({ ...prev, valorUnitario: selectedSerie ? formatDecimalDisplay(selectedSerie.valorUnitario) : '' }));
+  }, [series, form.debentureSerieId, isEdit]);
+
+  useEffect(() => {
+    if (selectedInvestidorId || !form.investidorNome || !form.investidorDocumento) {
+      return;
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const match = investidores.find(
+      (item) => item.nome === form.investidorNome && sanitizeDocument(item.documento ?? '') === sanitizeDocument(form.investidorDocumento),
+    );
+    if (match) {
+      setSelectedInvestidorId(match.id);
+    }
+  }, [investidores, selectedInvestidorId, form.investidorNome, form.investidorDocumento]);
 
   const ensureValid = () => {
     if (!form.debentureEmissaoId) {
@@ -234,10 +300,16 @@ export const DebentureVendaFormPage = () => {
     }
   };
 
-  const selectedEmissao = useMemo(
-    () => emissoes.find((item) => item.id === form.debentureEmissaoId),
-    [emissoes, form.debentureEmissaoId],
-  );
+  const valorTotalVenda = useMemo(() => {
+    const quantidade = Number(form.quantidadeVendida);
+    const valorUnitario = toDecimal(form.valorUnitario);
+
+    if (!Number.isFinite(quantidade) || !Number.isFinite(valorUnitario)) {
+      return 0;
+    }
+
+    return quantidade * valorUnitario;
+  }, [form.quantidadeVendida, form.valorUnitario]);
 
   if (loading) {
     return (
@@ -265,7 +337,14 @@ export const DebentureVendaFormPage = () => {
               <span>Emissão</span>
               <select
                 value={form.debentureEmissaoId}
-                onChange={(event) => setForm((prev) => ({ ...prev, debentureEmissaoId: event.target.value, debentureSerieId: '' }))}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    debentureEmissaoId: event.target.value,
+                    debentureSerieId: '',
+                    valorUnitario: '',
+                  }))
+                }
                 disabled={isEdit}
                 required
               >
@@ -292,22 +371,31 @@ export const DebentureVendaFormPage = () => {
             </label>
 
             <label>
-              <span>Status</span>
-              <select value={Number(form.status)} onChange={(event) => setForm((prev) => ({ ...prev, status: Number(event.target.value) as DebentureStatusVenda }))}>
-                {Object.entries(debentureStatusVendaLabel).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
+              <span>Investidor</span>
+              <select
+                value={selectedInvestidorId}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  setSelectedInvestidorId(nextId);
+                  const selected = investidores.find((item) => item.id === nextId);
+                  setForm((prev) => ({
+                    ...prev,
+                    investidorNome: selected?.nome ?? '',
+                    investidorDocumento: sanitizeDocument(selected?.documento ?? ''),
+                  }));
+                }}
+                required={!isEdit}
+              >
+                <option value="">
+                  {investidoresLoading ? 'Carregando...' : isEdit && form.investidorNome ? `Atual: ${form.investidorNome}` : 'Selecione'}
+                </option>
+                {investidores.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nome}
+                    {item.documento ? ` (${formatCpfCnpj(item.documento)})` : ''}
+                  </option>
                 ))}
               </select>
-            </label>
-
-            <label>
-              <span>Investidor</span>
-              <input value={form.investidorNome} onChange={(event) => setForm((prev) => ({ ...prev, investidorNome: event.target.value }))} required />
-            </label>
-
-            <label>
-              <span>CPF/CNPJ</span>
-              <input value={form.investidorDocumento} onChange={(event) => setForm((prev) => ({ ...prev, investidorDocumento: applyCpfCnpjMask(event.target.value) }))} required />
             </label>
 
             <label>
@@ -325,7 +413,7 @@ export const DebentureVendaFormPage = () => {
 
             <label>
               <span>Valor Unitário</span>
-              <input type="number" min="0" step="0.01" value={form.valorUnitario} onChange={(event) => setForm((prev) => ({ ...prev, valorUnitario: event.target.value }))} required />
+              <input type="text" value={form.valorUnitario} readOnly required />
             </label>
 
             <label>
@@ -334,8 +422,8 @@ export const DebentureVendaFormPage = () => {
             </label>
 
             <label>
-              <span>Emissão Selecionada</span>
-              <input value={selectedEmissao ? selectedEmissao.nomeEmissao : '-'} disabled />
+              <span>Valor Total da Venda</span>
+              <input value={formatCurrency(valorTotalVenda)} readOnly />
             </label>
           </div>
         </section>
