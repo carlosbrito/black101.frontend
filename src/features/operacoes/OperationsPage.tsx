@@ -12,8 +12,8 @@ import './operations/operations-unified.css';
 
 type OperacaoRow = {
   id: string;
+  identidade: number;
   numero: string;
-  identityLabel?: string;
   modalidade?: string | null;
   dataOperacao: string;
   origem?: string | null;
@@ -53,12 +53,7 @@ const statusLabel = (value?: unknown) => {
   return text.replaceAll('_', ' ');
 };
 
-const buildOperationIdentity = (id: string) => {
-  const shortHex = id.replaceAll('-', '').slice(0, 8);
-  const numeric = Number.parseInt(shortHex || '0', 16);
-  const safe = Number.isFinite(numeric) ? Math.abs(numeric) : 0;
-  return `OP-${String(safe % 1_000_000).padStart(6, '0')}`;
-};
+const formatIdentity = (value?: number) => (typeof value === 'number' && Number.isFinite(value) ? `OP-${String(value).padStart(6, '0')}` : '-');
 
 const iconPathByName = {
   download: 'M12 3v12m0 0l4-4m-4 4l-4-4M5 19h14',
@@ -85,7 +80,7 @@ export const OperacoesPage = () => {
     {
       key: 'numero',
       label: 'Operação',
-      render: (row) => <button type="button" className="operation-link-btn" onClick={() => navigate(`/operacoes/${row.id}/editar`)}>{row.identityLabel ?? row.id}</button>,
+      render: (row) => <button type="button" className="operation-link-btn" onClick={() => navigate(`/operacoes/${row.id}/editar`)}>{formatIdentity(row.identidade)}</button>,
       priority: 1,
     },
     { key: 'modalidade', label: 'Modalidade', render: (row) => row.modalidade ?? '-', priority: 2 },
@@ -135,7 +130,6 @@ export const OperacoesPage = () => {
       setRows(items.map((item) => ({
         ...item,
         id: String(item.id),
-        identityLabel: buildOperationIdentity(String(item.id)),
       })));
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -193,12 +187,46 @@ export const OperacoesPage = () => {
     navigate(`/operacoes/${row.id}/editar`, { state: { initialTab: 'anexos' } });
   };
 
+  const totalizadores = {
+    operacoes: rows.length,
+    valorFace: rows.reduce((sum, row) => sum + (row.valorFace ?? 0), 0),
+    valorAPagar: rows.reduce((sum, row) => sum + (row.valorAPagar ?? 0), 0),
+    titulos: rows.reduce((sum, row) => sum + (row.quantidadeRecebiveis ?? 0), 0),
+    sacados: rows.reduce((sum, row) => sum + (row.quantidadeSacados ?? 0), 0),
+  };
+
   return (
     <PageFrame title="Operações" subtitle="Gestão das operações.">
       <div className="toolbar operations-toolbar">
         <button className="btn-main" onClick={() => setImportModalOpen(true)}>Importar nova operação</button>
         <button className="btn-muted" onClick={() => setHistoryModalOpen(true)}>Histórico de importações</button>
       </div>
+
+      <section
+        className="operations-totalizers"
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '0.65rem', margin: '0.65rem 0 0.85rem' }}
+      >
+        <article className="operations-totalizer-card">
+          <span>Operações</span>
+          <strong>{totalizadores.operacoes}</strong>
+        </article>
+        <article className="operations-totalizer-card">
+          <span>Valor Face Total</span>
+          <strong>{formatMoney(totalizadores.valorFace)}</strong>
+        </article>
+        <article className="operations-totalizer-card">
+          <span>Valor a Pagar Total</span>
+          <strong>{formatMoney(totalizadores.valorAPagar)}</strong>
+        </article>
+        <article className="operations-totalizer-card">
+          <span>Títulos</span>
+          <strong>{totalizadores.titulos}</strong>
+        </article>
+        <article className="operations-totalizer-card">
+          <span>Sacados</span>
+          <strong>{totalizadores.sacados}</strong>
+        </article>
+      </section>
 
       <DataTable
         columns={columns}
