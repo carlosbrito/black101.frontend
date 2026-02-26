@@ -201,6 +201,25 @@
   color: #854d0e;
 }
 
+.excel-analysis {
+  margin-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
+}
+
+.excel-analysis h4 {
+  margin: 0 0 8px;
+}
+
+.excel-analysis p {
+  margin: 0 0 6px;
+}
+
+.excel-analysis ul {
+  margin: 8px 0 0;
+  padding-left: 16px;
+}
+
 @media (max-width: 1080px) {
   .import-grid {
     grid-template-columns: 1fr;

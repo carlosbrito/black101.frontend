@@ -18,6 +18,7 @@ export enum DebentureStatusVenda {
 export enum DebentureTipoResgate {
   Parcial = 1,
   Total = 2,
+  SomenteRendimentos = 3,
 }
 
 export enum DebentureModoResgate {
@@ -53,6 +54,7 @@ export type DebentureEmissaoListDto = {
   valorTotal: number;
   valorPu: number;
   quantidadeTotal: number;
+  quantidadeDisponivel: number;
   status: DebentureStatusEmissao;
   seriesCount: number;
 };
@@ -66,10 +68,14 @@ export type DebentureVendaDto = {
   id: string;
   debentureEmissaoId: string;
   debentureSerieId: string;
+  numeroEmissao: string;
+  codigoSerie: string;
   investidorNome: string;
   investidorDocumento: string;
   quantidadeVendida: number;
   quantidadeResgatada: number;
+  quantidadeDisponivelParaVenda: number;
+  valorResgatado: number;
   valorUnitario: number;
   valorTotal: number;
   valorRendimentoAtual: number;
@@ -80,6 +86,36 @@ export type DebentureVendaDto = {
   status: DebentureStatusVenda;
   comprovanteNumero?: string | null;
   comprovanteEnviadoCertificadora: boolean;
+};
+
+export type DebentureVendaRendimentoDiarioDto = {
+  dataReferencia: string;
+  principalAbertura: number;
+  fatorCdiUtilizado: number;
+  fatorAplicado: number;
+  rendimentoDia: number;
+  rendimentoAcumulado: number;
+  valorIrAcumulado: number;
+  valorIofAcumulado: number;
+  principalFechamento: number;
+  isSinteticoDiaVenda: boolean;
+};
+
+export type DebentureVendaRendimentoResumoDto = {
+  rendimentoAcumulado: number;
+  valorIrAcumulado: number;
+  valorIofAcumulado: number;
+  principalAtual: number;
+  ultimaDataProcessada?: string | null;
+};
+
+export type DebentureVendaRendimentoPagedResponse = {
+  items: DebentureVendaRendimentoDiarioDto[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  resumo: DebentureVendaRendimentoResumoDto;
 };
 
 export type DebentureResgateDto = {
@@ -140,6 +176,7 @@ export const debentureIndiceTipoLabel: Record<number, string> = {
 export const debentureTipoResgateLabel: Record<number, string> = {
   [DebentureTipoResgate.Parcial]: 'Parcial',
   [DebentureTipoResgate.Total]: 'Total',
+  [DebentureTipoResgate.SomenteRendimentos]: 'Somente dos rendimentos',
 };
 
 export const debentureModoResgateLabel: Record<number, string> = {

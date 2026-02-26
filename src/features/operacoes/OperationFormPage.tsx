@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../shared/api/http';
 import { PageFrame } from '../../shared/ui/PageFrame';
 import { formatDateTime, readPagedResponse } from '../cadastros/cadastroCommon';
+import {
+  GarantiaStatusJuridico,
+  GarantiaStatusAlocacao,
+  GarantiaTipoAlocacao,
+  garantiaStatusJuridicoLabel,
+} from '../cadastros/garantias/types';
 import './operations/operation-form.css';
 
-type TabKey = 'operacao' | 'recebiveis' | 'sacados' | 'anexos' | 'observacoes' | 'historico';
+type TabKey = 'operacao' | 'recebiveis' | 'sacados' | 'garantias' | 'anexos' | 'observacoes' | 'historico';
 type PagedResponse<T> = { items: T[]; page: number; pageSize: number; totalItems: number; totalPages: number };
 
 type OperacaoDto = {
@@ -15,11 +21,40 @@ type OperacaoDto = {
   descricao: string;
   valor: number;
   dataOperacao: string;
+  createdAt: string;
   status: string;
   cedenteId?: string | null;
   quantidadeRecebiveis?: number;
   valorTotalRecebiveis?: number;
   quantidadeSacados?: number;
+  cedenteNome?: string | null;
+  cedenteCnpjCpf?: string | null;
+  modalidade?: string | null;
+  abertoPorEmail?: string | null;
+  fechadoPorEmail?: string | null;
+  agenteNome?: string | null;
+  hasLastro?: boolean;
+  valorFace?: number | null;
+  desagio?: number | null;
+  taxa?: number | null;
+  float?: number | null;
+  feeTerceirosPercentual?: number | null;
+  feeTerceirosCalculado?: number | null;
+  prazoMedioDias?: number | null;
+  roa?: number | null;
+  cet?: number | null;
+  cedenteLimiteTotal?: number | null;
+  cedenteTrancheModalidade?: number | null;
+  cedenteValoresEmAberto?: number | null;
+  cedentePrimeiraOperacao?: string | null;
+  cedenteUltimaOperacao?: string | null;
+  cedenteContaBancaria?: string | null;
+  validacaoTemRecebiveis?: boolean;
+  validacaoTemSacados?: boolean;
+  validacaoTemGarantiasAtivas?: boolean;
+  validacaoValorOperacaoPositivo?: boolean;
+  validacaoValorFaceCompativel?: boolean;
+  validacaoCedenteInformado?: boolean;
 };
 
 type OperacaoRecebivelDto = {
@@ -70,11 +105,21 @@ type OperacaoHistoricoDto = {
 };
 
 type SacadoOption = { id: string; nome: string; documento?: string | null };
+type GarantiaListDto = {
+  id: string;
+  codigoInterno: string;
+  titulo: string;
+  statusJuridico: number;
+  valorElegivelDisponivel: number;
+  valorAlocadoAtivo: number;
+  createdAt: string;
+};
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: 'operacao', label: 'Operação' },
   { key: 'recebiveis', label: 'Recebíveis' },
   { key: 'sacados', label: 'Sacados' },
+  { key: 'garantias', label: 'Garantias' },
   { key: 'anexos', label: 'Anexos' },
   { key: 'observacoes', label: 'Observações' },
   { key: 'historico', label: 'Histórico' },
@@ -82,18 +127,26 @@ const tabs: Array<{ key: TabKey; label: string }> = [
 
 const formatMoney = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number.isFinite(value) ? value : 0);
+const formatPercent = (value?: number | null, digits = 2) => (typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(digits)}%` : '-');
+const valueOrDash = (value?: unknown) => {
+  if (value === null || value === undefined) return '-';
+  const text = String(value).trim();
+  return text.length > 0 ? text : '-';
+};
 
 export const OperationFormPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [activeTab, setActiveTab] = useState<TabKey>('operacao');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   const [operacao, setOperacao] = useState<OperacaoDto | null>(null);
   const [recebiveisPaged, setRecebiveisPaged] = useState<PagedResponse<OperacaoRecebivelDto>>({ items: [], page: 1, pageSize: 20, totalItems: 0, totalPages: 1 });
   const [sacados, setSacados] = useState<OperacaoSacadoDto[]>([]);
+  const [garantiasVinculadas, setGarantiasVinculadas] = useState<GarantiaListDto[]>([]);
+  const [garantiasDisponiveis, setGarantiasDisponiveis] = useState<GarantiaListDto[]>([]);
   const [anexos, setAnexos] = useState<CadastroArquivoDto[]>([]);
   const [observacoes, setObservacoes] = useState<CadastroObservacaoDto[]>([]);
   const [historicoPaged, setHistoricoPaged] = useState<PagedResponse<OperacaoHistoricoDto>>({ items: [], page: 1, pageSize: 20, totalItems: 0, totalPages: 1 });
@@ -102,8 +155,18 @@ export const OperationFormPage = () => {
   const [anexoFile, setAnexoFile] = useState<File | null>(null);
   const [sacadoId, setSacadoId] = useState('');
   const [sacadosOptions, setSacadosOptions] = useState<SacadoOption[]>([]);
+  const [garantiaId, setGarantiaId] = useState('');
+  const [garantiaValorAlocado, setGarantiaValorAlocado] = useState('');
 
   const canLoad = Boolean(id);
+
+  useEffect(() => {
+    const initialTab = (location.state as { initialTab?: TabKey } | null)?.initialTab;
+    if (initialTab && tabs.some((tab) => tab.key === initialTab)) {
+      setActiveTab(initialTab);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const loadOperacao = useCallback(async () => {
     if (!id) return;
@@ -131,6 +194,27 @@ export const OperationFormPage = () => {
     setAnexos(response.data ?? []);
   }, [id]);
 
+  const loadGarantias = useCallback(async () => {
+    if (!id) return;
+
+    const [vinculadasResponse, todasResponse] = await Promise.all([
+      http.get('/cadastros/garantias', {
+        params: { page: 1, pageSize: 200, operacaoId: id, sortBy: 'codigoInterno', sortDir: 'asc' },
+      }),
+      http.get('/cadastros/garantias', {
+        params: { page: 1, pageSize: 200, sortBy: 'codigoInterno', sortDir: 'asc' },
+      }),
+    ]);
+
+    const vinculadas = readPagedResponse<GarantiaListDto>(vinculadasResponse.data).items ?? [];
+    const todas = readPagedResponse<GarantiaListDto>(todasResponse.data).items ?? [];
+    const vinculadasIds = new Set(vinculadas.map((item) => item.id));
+
+    setGarantiasVinculadas(vinculadas);
+    setGarantiasDisponiveis(todas.filter((item) => !vinculadasIds.has(item.id) && item.valorElegivelDisponivel > 0));
+    setGarantiaId((current) => (current && !vinculadasIds.has(current) ? current : ''));
+  }, [id]);
+
   const loadObservacoes = useCallback(async () => {
     if (!id) return;
     const response = await http.get<CadastroObservacaoDto[]>(`/operacoes/${id}/observacoes`);
@@ -155,36 +239,15 @@ export const OperationFormPage = () => {
     if (!canLoad) return;
     setLoading(true);
     try {
-      await Promise.all([loadOperacao(), loadRecebiveis(1), loadSacados(), loadAnexos(), loadObservacoes(), loadHistorico(1), loadSacadosOptions()]);
+      await Promise.all([loadOperacao(), loadRecebiveis(1), loadSacados(), loadGarantias(), loadAnexos(), loadObservacoes(), loadHistorico(1), loadSacadosOptions()]);
     } finally {
       setLoading(false);
     }
-  }, [canLoad, loadOperacao, loadRecebiveis, loadSacados, loadAnexos, loadObservacoes, loadHistorico, loadSacadosOptions]);
+  }, [canLoad, loadOperacao, loadRecebiveis, loadSacados, loadGarantias, loadAnexos, loadObservacoes, loadHistorico, loadSacadosOptions]);
 
   useEffect(() => {
     void loadAll().catch((error) => toast.error(getErrorMessage(error)));
   }, [loadAll]);
-
-  const onSaveOperacao = async () => {
-    if (!id || !operacao) return;
-    setSaving(true);
-    try {
-      await http.put(`/operacoes/${id}`, {
-        numero: operacao.numero,
-        descricao: operacao.descricao,
-        valor: operacao.valor,
-        dataOperacao: operacao.dataOperacao,
-        status: operacao.status,
-        cedenteId: operacao.cedenteId,
-      });
-      toast.success('Operação atualizada.');
-      await loadOperacao();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const onAddSacado = async () => {
     if (!id || !sacadoId) {
@@ -284,7 +347,83 @@ export const OperationFormPage = () => {
     }
   };
 
+  const onVincularGarantia = async () => {
+    if (!id || !operacao) return;
+    if (!garantiaId) {
+      toast.error('Selecione uma garantia para vincular.');
+      return;
+    }
+
+    const selectedGarantia = garantiasDisponiveis.find((item) => item.id === garantiaId);
+    const valorAlocado = Number(garantiaValorAlocado);
+    if (!Number.isFinite(valorAlocado) || valorAlocado <= 0) {
+      toast.error('Informe um valor alocado válido.');
+      return;
+    }
+
+    if (selectedGarantia && valorAlocado > selectedGarantia.valorElegivelDisponivel) {
+      toast.error('Valor alocado maior que o elegível disponível da garantia.');
+      return;
+    }
+
+    try {
+      await http.post(`/cadastros/garantias/${garantiaId}/alocacoes`, {
+        operacaoId: id,
+        tipoAlocacao: GarantiaTipoAlocacao.ValorFixo,
+        percentualAlocado: null,
+        valorAlocado,
+        exposicaoReferencia: Number(operacao.valor ?? 0),
+        dataAlocacao: new Date().toISOString().slice(0, 10),
+        status: GarantiaStatusAlocacao.Ativa,
+      });
+      toast.success('Garantia vinculada à operação.');
+      setGarantiaId('');
+      setGarantiaValorAlocado('');
+      await loadGarantias();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
   const activeSacadoIds = useMemo(() => new Set(sacados.map((item) => item.sacadoId).filter(Boolean)), [sacados]);
+  const garantiaLinkResumo = garantiasVinculadas.length > 0
+    ? `${garantiasVinculadas.length} garantia(s) vinculada(s).`
+    : 'Nenhuma garantia vinculada.';
+  const operationStatusTone = String(operacao?.status ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const validacoesGraficos = useMemo(() => {
+    const groups = [
+      {
+        label: 'Cedente',
+        rules: [Boolean(operacao?.validacaoCedenteInformado)],
+      },
+      {
+        label: 'Operação',
+        rules: [Boolean(operacao?.validacaoValorOperacaoPositivo), Boolean(operacao?.validacaoValorFaceCompativel)],
+      },
+      {
+        label: 'Recebíveis',
+        rules: [Boolean(operacao?.validacaoTemRecebiveis)],
+      },
+      {
+        label: 'Sacados',
+        rules: [Boolean(operacao?.validacaoTemSacados)],
+      },
+      {
+        label: 'Garantias',
+        rules: [Boolean(operacao?.validacaoTemGarantiasAtivas)],
+      },
+    ];
+
+    return groups.map((group) => {
+      const total = group.rules.length;
+      const ok = group.rules.filter(Boolean).length;
+      const percent = total > 0 ? Math.round((ok / total) * 100) : 0;
+      return { label: group.label, ok, total, percent };
+    });
+  }, [operacao]);
 
   if (!canLoad) {
     return (
@@ -297,13 +436,66 @@ export const OperationFormPage = () => {
   return (
     <PageFrame
       title="Edição de Operação"
-      subtitle="Paridade com legado: Operação, Recebíveis, Sacados, Anexos, Observações e Histórico."
+      subtitle="Paridade com legado: Operação, Recebíveis, Sacados, Garantias, Anexos, Observações e Histórico."
       actions={<button className="btn-muted" onClick={() => navigate('/operacoes')}>Voltar para lista</button>}
     >
       {loading ? <div className="entity-loading">Carregando operação...</div> : null}
 
       {operacao ? (
         <>
+          <section className="operation-legacy-header">
+            <article className="operation-legacy-card operation-card-main">
+              <header className="operation-card-title-row">
+                <div>
+                  <span className="operation-card-kicker">Capa da operação</span>
+                  <h2>OPERAÇÃO: {operacao.numero}</h2>
+                </div>
+                <span className={`operation-status-pill is-${operationStatusTone}`}>{valueOrDash(operacao.status)}</span>
+              </header>
+              <div className="operation-card-content operation-card-content-main">
+                <p className="operation-card-value-highlight">{formatMoney(operacao.valor ?? 0)}</p>
+                <div className="operation-card-data-grid">
+                  <p><strong>Cedente</strong><span>{valueOrDash(operacao.cedenteNome)}</span></p>
+                  <p><strong>CNPJ</strong><span>{valueOrDash(operacao.cedenteCnpjCpf)}</span></p>
+                  <p><strong>Modalidade</strong><span>{valueOrDash(operacao.modalidade)}</span></p>
+                  <p><strong>Data criação</strong><span>{formatDateTime(operacao.createdAt)}</span></p>
+                  <p><strong>Data operação</strong><span>{operacao.dataOperacao ? formatDateTime(operacao.dataOperacao) : '-'}</span></p>
+                  <p><strong>Status</strong><span>{valueOrDash(operacao.status)}</span></p>
+                </div>
+              </div>
+              {operacao.hasLastro ? <p className="legacy-disclaimer">*Operação lastreada.</p> : null}
+            </article>
+
+            <article className="operation-legacy-card operation-card-summary">
+              <header className="operation-card-title-row">
+                <div>
+                  <span className="operation-card-kicker">Resumo</span>
+                  <h3>Dados</h3>
+                </div>
+              </header>
+              <div className="operation-card-content">
+                <p><strong>Recebíveis</strong><span>{operacao.quantidadeRecebiveis ?? recebiveisPaged.totalItems}</span></p>
+                <p><strong>Documentos</strong><span>{operacao.quantidadeRecebiveis ?? recebiveisPaged.totalItems}</span></p>
+                <p><strong>Sacados</strong><span>{operacao.quantidadeSacados ?? sacados.length}</span></p>
+                <p><strong>Garantias</strong><span>{garantiasVinculadas.length}</span></p>
+              </div>
+            </article>
+
+            <article className="operation-legacy-card operation-card-trace">
+              <header className="operation-card-title-row">
+                <div>
+                  <span className="operation-card-kicker">Rastreabilidade</span>
+                  <h3>Informações</h3>
+                </div>
+              </header>
+              <div className="operation-card-content">
+                <p><strong>Aberto por</strong><span>{valueOrDash(operacao.abertoPorEmail)}</span></p>
+                <p><strong>Fechado por</strong><span>{valueOrDash(operacao.fechadoPorEmail)}</span></p>
+                <p><strong>Agente</strong><span>{valueOrDash(operacao.agenteNome)}</span></p>
+              </div>
+            </article>
+          </section>
+
           <div className="operation-tabs">
             {tabs.map((tab) => (
               <button
@@ -319,28 +511,58 @@ export const OperationFormPage = () => {
 
           {activeTab === 'operacao' ? (
             <section className="entity-form-stack">
-              <section className="entity-card">
-                <div className="entity-grid cols-2">
-                  <label><span>Número</span><input value={operacao.numero} onChange={(e) => setOperacao((p) => (p ? { ...p, numero: e.target.value } : p))} /></label>
-                  <label><span>Status</span>
-                    <select value={operacao.status} onChange={(e) => setOperacao((p) => (p ? { ...p, status: e.target.value } : p))}>
-                      <option value="Aberta">Aberta</option>
-                      <option value="Liquidada">Liquidada</option>
-                      <option value="Cancelada">Cancelada</option>
-                    </select>
-                  </label>
-                  <label className="span-all"><span>Descrição</span><input value={operacao.descricao} onChange={(e) => setOperacao((p) => (p ? { ...p, descricao: e.target.value } : p))} /></label>
-                  <label><span>Valor da Capa</span><input type="number" step="0.01" value={operacao.valor} onChange={(e) => setOperacao((p) => (p ? { ...p, valor: Number(e.target.value) || 0 } : p))} /></label>
-                  <label><span>Data da Operação</span><input type="date" value={operacao.dataOperacao?.substring(0, 10)} onChange={(e) => setOperacao((p) => (p ? { ...p, dataOperacao: e.target.value } : p))} /></label>
-                </div>
-                <div className="entity-actions">
-                  <button type="button" className="btn-main" onClick={() => void onSaveOperacao()} disabled={saving}>{saving ? 'Salvando...' : 'Salvar capa da operação'}</button>
-                </div>
+              <section className="operation-cover-legacy-grid">
+                <article className="entity-card operation-cover-card">
+                  <header><h3>Dados da Operação</h3></header>
+                  <div className="operation-cover-list">
+                    <p><strong>Valor de Face</strong><span>{formatMoney(Number(operacao.valorFace ?? operacao.valorTotalRecebiveis ?? 0))}</span></p>
+                    <p><strong>Deságio</strong><span>{formatMoney(Number(operacao.desagio ?? 0))}</span></p>
+                    <p><strong>Taxa</strong><span>{formatPercent(operacao.taxa, 4)}</span></p>
+                    <p><strong>Float</strong><span>{operacao.float ?? '-'}</span></p>
+                    <p><strong>Fee - Terceiros ({formatPercent(operacao.feeTerceirosPercentual)})</strong><span>{formatMoney(Number(operacao.feeTerceirosCalculado ?? 0))}</span></p>
+                    <p><strong>Prazo Médio</strong><span>{operacao.prazoMedioDias ? `${operacao.prazoMedioDias} dias` : '-'}</span></p>
+                    <p><strong>ROA</strong><span>{formatPercent(operacao.roa, 4)}</span></p>
+                    <p><strong>CET</strong><span>{formatPercent(operacao.cet, 4)}</span></p>
+                  </div>
+                </article>
+
+                <article className="entity-card operation-cover-card">
+                  <header><h3>Dados do Cedente</h3></header>
+                  <div className="operation-cover-list">
+                    <p><strong>Nome</strong><span>{valueOrDash(operacao.cedenteNome)}</span></p>
+                    <p><strong>CNPJ</strong><span>{valueOrDash(operacao.cedenteCnpjCpf)}</span></p>
+                    <p><strong>Modalidade</strong><span>{valueOrDash(operacao.modalidade)}</span></p>
+                    <p><strong>Limite Total</strong><span>{formatMoney(Number(operacao.cedenteLimiteTotal ?? 0))}</span></p>
+                    <p><strong>Tranche Modalidade</strong><span>{formatMoney(Number(operacao.cedenteTrancheModalidade ?? 0))}</span></p>
+                    <p><strong>Valores em Aberto</strong><span>{formatMoney(Number(operacao.cedenteValoresEmAberto ?? 0))}</span></p>
+                    <p><strong>Primeira Operação</strong><span>{operacao.cedentePrimeiraOperacao ? formatDateTime(operacao.cedentePrimeiraOperacao) : '-'}</span></p>
+                    <p><strong>Última Operação</strong><span>{operacao.cedenteUltimaOperacao ? formatDateTime(operacao.cedenteUltimaOperacao) : '-'}</span></p>
+                    <p><strong>Conta Bancária</strong><span>{valueOrDash(operacao.cedenteContaBancaria)}</span></p>
+                  </div>
+                </article>
+
+                <article className="entity-card operation-cover-card">
+                  <header><h3>Validações</h3></header>
+                  <div className="operation-validation-gauges">
+                    {validacoesGraficos.map((gauge) => (
+                      <article key={gauge.label} className="operation-validation-gauge">
+                        <div
+                          className="operation-validation-ring"
+                          style={{ background: `conic-gradient(#20a8d8 ${gauge.percent}%, #dde6f6 ${gauge.percent}% 100%)` }}
+                        >
+                          <span>{gauge.percent}%</span>
+                        </div>
+                        <h4>{gauge.label}</h4>
+                        <small>{gauge.ok}/{gauge.total} regras</small>
+                      </article>
+                    ))}
+                  </div>
+                </article>
               </section>
-              <section className="entity-card operation-summary-grid">
-                <article><h4>Recebíveis</h4><strong>{operacao.quantidadeRecebiveis ?? recebiveisPaged.totalItems}</strong></article>
-                <article><h4>Valor Total Recebíveis</h4><strong>{formatMoney(operacao.valorTotalRecebiveis ?? 0)}</strong></article>
-                <article><h4>Sacados</h4><strong>{operacao.quantidadeSacados ?? sacados.length}</strong></article>
+
+              <section className={`entity-card operation-guarantee-highlight ${garantiasVinculadas.length > 0 ? 'is-linked' : 'is-unlinked'}`}>
+                <h4>Vínculo com Garantias</h4>
+                <p>{garantiaLinkResumo}</p>
               </section>
             </section>
           ) : null}
@@ -446,6 +668,70 @@ export const OperationFormPage = () => {
                     {anexos.length === 0 ? <tr><td colSpan={5}>Nenhum anexo cadastrado.</td></tr> : null}
                   </tbody>
                 </table>
+              </section>
+            </section>
+          ) : null}
+
+          {activeTab === 'garantias' ? (
+            <section className="entity-form-stack">
+              <section className="entity-card">
+                <header><h3>Vincular garantia à operação</h3></header>
+                <div className="entity-grid cols-3">
+                  <label>
+                    <span>Garantia disponível</span>
+                    <select value={garantiaId} onChange={(event) => setGarantiaId(event.target.value)}>
+                      <option value="">Selecione</option>
+                      {garantiasDisponiveis.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.codigoInterno} - {item.titulo}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Valor alocado</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={garantiaValorAlocado}
+                      onChange={(event) => setGarantiaValorAlocado(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Exposição da operação</span>
+                    <input value={formatMoney(Number(operacao.valor ?? 0))} readOnly />
+                  </label>
+                </div>
+                <div className="entity-actions">
+                  <button type="button" className="btn-main" onClick={() => void onVincularGarantia()}>
+                    Vincular garantia
+                  </button>
+                  <button type="button" className="btn-muted" onClick={() => void loadGarantias()}>
+                    Recarregar lista
+                  </button>
+                </div>
+              </section>
+
+              <section className="entity-card">
+                <header><h3>Garantias já vinculadas</h3></header>
+                <div className="entity-table-wrap">
+                  <table>
+                    <thead><tr><th>Código</th><th>Título</th><th>Status</th><th>Valor já alocado</th><th>Data cadastro</th></tr></thead>
+                    <tbody>
+                      {garantiasVinculadas.map((item) => (
+                        <tr key={item.id}>
+                          <td>{item.codigoInterno}</td>
+                          <td>{item.titulo}</td>
+                          <td>{garantiaStatusJuridicoLabel[item.statusJuridico as GarantiaStatusJuridico] ?? item.statusJuridico}</td>
+                          <td>{formatMoney(item.valorAlocadoAtivo)}</td>
+                          <td>{formatDateTime(item.createdAt)}</td>
+                        </tr>
+                      ))}
+                      {garantiasVinculadas.length === 0 ? <tr><td colSpan={5}>Nenhuma garantia vinculada a esta operação.</td></tr> : null}
+                    </tbody>
+                  </table>
+                </div>
               </section>
             </section>
           ) : null}

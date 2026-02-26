@@ -840,7 +840,7 @@ test('layout sem overflow horizontal global', async ({ page }) => {
   await assertNoPageHorizontalOverflow(page);
   await page.goto('/cadastro/administradoras');
   await assertNoPageHorizontalOverflow(page);
-  await page.goto('/operacoes/importacoes');
+  await page.goto('/operacoes');
   await assertNoPageHorizontalOverflow(page);
   await page.goto('/operacoes/workers');
   await assertNoPageHorizontalOverflow(page);
@@ -992,39 +992,46 @@ test('crud cedentes', async ({ page }) => {
 
 test('importacoes: envia arquivo e abre detalhes', async ({ page }) => {
   await login(page);
-  await page.goto('/operacoes/importacoes');
+  await page.goto('/operacoes');
+  await page.getByRole('button', { name: 'Importar nova operação' }).click();
+  const importModal = page.locator('.operations-modal-card').first();
 
-  const cedenteField = page.locator('.upload-card .form-grid label').filter({ hasText: 'Cedente*' }).first();
-  const modalidadeField = page.locator('.upload-card .form-grid label').filter({ hasText: 'Modalidade' }).first();
+  const cedenteField = importModal.locator('.upload-card .form-grid label').filter({ hasText: 'Cedente*' }).first();
+  const modalidadeField = importModal.locator('.upload-card .form-grid label').filter({ hasText: 'Modalidade' }).first();
   const [cedenteBox, modalidadeBox] = await Promise.all([cedenteField.boundingBox(), modalidadeField.boundingBox()]);
   expect(cedenteBox).not.toBeNull();
   expect(modalidadeBox).not.toBeNull();
   expect((cedenteBox as { y: number }).y).toBeLessThan((modalidadeBox as { y: number }).y);
 
-  await page.locator('select').first().selectOption({ index: 1 });
-  await expect(page.locator('.upload-card .form-grid label:has-text("Modalidade") option')).toHaveCount(3);
-  await expect(page.locator('.upload-card .form-grid label:has-text("Modalidade") option').nth(1)).toHaveText('DUPLICATA');
-  await expect(page.locator('.upload-card .form-grid label:has-text("Modalidade") option').nth(2)).toHaveText('CCB');
-  await page.locator('input[type="file"]').setInputFiles({
+  await importModal.locator('select').first().selectOption({ index: 1 });
+  await expect(importModal.locator('.upload-card .form-grid label:has-text("Modalidade") option')).toHaveCount(3);
+  await expect(importModal.locator('.upload-card .form-grid label:has-text("Modalidade") option').nth(1)).toHaveText('DUPLICATA');
+  await expect(importModal.locator('.upload-card .form-grid label:has-text("Modalidade") option').nth(2)).toHaveText('CCB');
+  await importModal.locator('input[type="file"]').setInputFiles({
     name: 'lote-teste.rem',
     mimeType: 'text/plain',
     buffer: Buffer.from('OP001;Operacao teste;1200.50;2026-02-18'),
   });
 
-  await page.getByRole('button', { name: 'Enviar para processamento' }).click();
+  await importModal.getByRole('button', { name: 'Importar operação' }).click();
+  await page.getByRole('button', { name: 'Histórico de importações' }).click();
+  const historyModal = page.locator('.operations-history-modal').first();
+  await historyModal.getByRole('button', { name: 'Detalhes' }).first().click();
   await expect(page.getByText('Detalhes da importação')).toBeVisible();
-  await expect(page.locator('.drawer-card .pill').first()).toHaveText('PROCESSANDO');
+  await expect(page.locator('.import-details-modal-card .pill').first()).toHaveText('PROCESSANDO');
 });
 
 test('importacoes: reprocessa item com falha', async ({ page }) => {
   await login(page);
-  await page.goto('/operacoes/importacoes');
+  await page.goto('/operacoes');
+  await page.getByRole('button', { name: 'Histórico de importações' }).click();
+  const historyModal = page.locator('.operations-history-modal').first();
 
-  await page.getByRole('button', { name: 'Detalhes' }).first().evaluate((element) => {
+  await historyModal.getByRole('button', { name: 'Detalhes' }).first().evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
-  await page.locator('.drawer-card').getByRole('button', { name: 'Reprocessar' }).click();
+  await page.locator('.import-details-modal-card').getByRole('button', { name: 'Reprocessar' }).click();
 
   await expect(page.getByText('Detalhes da importação')).toBeVisible();
-  await expect(page.locator('.drawer-card .pill').first()).toHaveText('PROCESSANDO');
+  await expect(page.locator('.import-details-modal-card .pill').first()).toHaveText('PROCESSANDO');
 });

@@ -15,6 +15,7 @@ const columns: Column<DebentureEmissaoListDto>[] = [
   { key: 'dataEmissao', label: 'Data', render: (row) => new Date(row.dataEmissao).toLocaleDateString() },
   { key: 'valorTotal', label: 'Valor Total', render: (row) => row.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
   { key: 'quantidadeTotal', label: 'Quantidade' },
+  { key: 'quantidadeDisponivel', label: 'Qtdade Disponivel' },
   { key: 'seriesCount', label: 'Séries' },
   { key: 'status', label: 'Status', render: (row) => debentureStatusEmissaoLabel[row.status] ?? '-' },
 ];

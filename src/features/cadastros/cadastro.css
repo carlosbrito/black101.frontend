@@ -19,7 +19,21 @@
   background: #fff;
 }
 
+.toolbar select {
+  min-width: 180px;
+  border: 1px solid #bbd4ea;
+  border-radius: 10px;
+  padding: 0.58rem 0.72rem;
+  background: #fff;
+}
+
 .toolbar input:focus {
+  border-color: #65afe5;
+  outline: none;
+  box-shadow: var(--glow-accent);
+}
+
+.toolbar select:focus {
   border-color: #65afe5;
   outline: none;
   box-shadow: var(--glow-accent);
@@ -151,6 +165,11 @@
   }
 
   .toolbar input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .toolbar select {
     width: 100%;
     min-width: 0;
   }

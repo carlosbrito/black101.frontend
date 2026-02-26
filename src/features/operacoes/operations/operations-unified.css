@@ -1,0 +1,141 @@
+.operations-toolbar {
+  justify-content: flex-start;
+}
+
+.operations-modal-card {
+  width: min(1200px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding-top: 0.75rem;
+}
+
+.operations-history-modal {
+  width: min(1560px, calc(100vw - 1rem));
+}
+
+.operations-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.4rem;
+}
+
+.operations-modal-card .upload-card,
+.operations-modal-card .list-card {
+  margin: 0;
+}
+
+.operations-modal-card .import-form-panel {
+  box-shadow: none;
+}
+
+.operations-modal-card .import-history-panel {
+  box-shadow: none;
+}
+
+.operation-link-btn {
+  border: 0;
+  background: transparent;
+  color: #0e5ea9;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.operation-link-btn:hover {
+  text-decoration: underline;
+}
+
+.operation-dates-cell,
+.operation-cedente-cell,
+.operation-qty-cell {
+  display: grid;
+  gap: 0.14rem;
+}
+
+.operation-dates-cell span,
+.operation-cedente-cell span,
+.operation-qty-cell span {
+  display: block;
+}
+
+.operations-actions-icons {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.operations-action-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #bcd4eb;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, #f2f8ff);
+  color: #184872;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.operations-action-btn:hover {
+  border-color: #7eb4df;
+  background: linear-gradient(180deg, #f8fcff, #e8f3ff);
+}
+
+.operations-action-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.operations-action-btn.danger {
+  color: var(--danger);
+  border-color: #e5c8c4;
+}
+
+.operations-action-btn.danger:hover {
+  border-color: #d7aba5;
+  background: #fff5f5;
+}
+
+.operations-history-modal .table-wrap {
+  overflow-x: hidden;
+}
+
+.operations-history-modal .table-wrap th,
+.operations-history-modal .table-wrap td {
+  white-space: nowrap;
+}
+
+.import-cell-ellipsis {
+  display: inline-block;
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.import-details-modal-backdrop {
+  z-index: 80;
+}
+
+.import-details-modal-card {
+  width: min(1080px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+
+@media (max-width: 760px) {
+  .operations-toolbar button {
+    width: 100%;
+  }
+
+  .operations-modal-card {
+    width: min(100%, 100vw);
+    padding: 0.6rem;
+  }
+
+  .import-cell-ellipsis {
+    max-width: 160px;
+  }
+}

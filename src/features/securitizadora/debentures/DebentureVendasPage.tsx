@@ -19,9 +19,10 @@ const formatDateTime = (value?: string | null) => {
 };
 
 const columns: Column<DebentureVendaDto>[] = [
+  { key: 'numeroEmissao', label: 'Emissão/Série', render: (row) => `${row.numeroEmissao || '-'} / ${row.codigoSerie || '-'}` },
   { key: 'investidorNome', label: 'Investidor' },
   { key: 'quantidadeVendida', label: 'Qtde Vendida' },
-  { key: 'quantidadeResgatada', label: 'Qtde Resgatada' },
+  { key: 'valorResgatado', label: 'Valor Resgatado', render: (row) => formatCurrency(row.valorResgatado) },
   { key: 'valorTotal', label: 'Valor Total', render: (row) => formatCurrency(row.valorTotal) },
   { key: 'valorRendimentoAtual', label: 'Rendimento', render: (row) => formatCurrency(row.valorRendimentoAtual) },
   { key: 'valorIrAtual', label: 'Valor IR', render: (row) => formatCurrency(row.valorIrAtual) },

@@ -37,7 +37,6 @@ import {
 import { MovimentacoesPage } from '../../features/financeiro/MovimentacoesPage';
 import { OperacoesPage } from '../../features/operacoes/OperationsPage';
 import { OperationFormPage } from '../../features/operacoes/OperationFormPage';
-import { ImportacoesPage } from '../../features/operacoes/ImportacoesPage';
 import { WorkersPage } from '../../features/operacoes/WorkersPage';
 import { AdministradoraFormPage } from '../../features/cadastros/administradoras/AdministradoraFormPage';
 import { AgenteFormPage } from '../../features/cadastros/agentes/AgenteFormPage';
@@ -50,6 +49,8 @@ import { TestemunhaFormPage } from '../../features/cadastros/testemunhas/Testemu
 import { ModalidadeFormPage } from '../../features/cadastros/modalidades/ModalidadeFormPage';
 import { EmpresaFormPage } from '../../features/cadastros/empresas/EmpresaFormPage';
 import { DespesaFormPage } from '../../features/cadastros/despesas/DespesaFormPage';
+import { GarantiasPage } from '../../features/cadastros/garantias/GarantiasPage';
+import { GarantiaFormPage } from '../../features/cadastros/garantias/GarantiaFormPage';
 import {
   ConsultoraFormPage,
   CustodianteFormPage,
@@ -142,6 +143,9 @@ export const AppRouter = () => {
           <Route path="/cadastro/despesas" element={<DespesasPage />} />
           <Route path="/cadastro/despesas/novo" element={<DespesaFormPage />} />
           <Route path="/cadastro/despesas/:id" element={<DespesaFormPage />} />
+          <Route path="/cadastro/garantias" element={<GarantiasPage />} />
+          <Route path="/cadastro/garantias/novo" element={<GarantiaFormPage />} />
+          <Route path="/cadastro/garantias/:id" element={<GarantiaFormPage />} />
           <Route path="/cadastro/grupo-economico" element={<GrupoEconomicoPage />} />
           <Route path="/cadastro/esteira-credito" element={<EsteiraCreditoPage />} />
           <Route path="/cadastro/indices-debentures" element={<IndicesDebenturePage />} />
@@ -155,7 +159,6 @@ export const AppRouter = () => {
           <Route path="/financeiro/movimentacoes" element={<MovimentacoesPage />} />
           <Route path="/operacoes" element={<OperacoesPage />} />
           <Route path="/operacoes/:id/editar" element={<OperationFormPage />} />
-          <Route path="/operacoes/importacoes" element={<ImportacoesPage />} />
           <Route path="/operacoes/workers" element={<WorkersPage />} />
 
           <Route path="/admin/usuarios" element={<AdminUsuariosPage />} />
