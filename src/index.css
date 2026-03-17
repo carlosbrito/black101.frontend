@@ -1,37 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
 :root {
-  font-family: "Manrope", "Segoe UI", sans-serif;
-  line-height: 1.5;
+  font-family: "Inter", "Segoe UI", sans-serif;
+  line-height: 1.6;
   font-weight: 400;
-  color: #dbe9ff;
+  color: #c9ddfb;
 
-  --brand: #0f6fbf;
-  --brand-strong: #0a4f8d;
-  --brand-soft: #e4f3ff;
-  --brand-accent: #32c9ff;
+  --brand: #0066cc;
+  --brand-strong: #004d99;
+  --brand-soft: #ebf4ff;
+  --brand-accent: #00ccff;
 
-  --ink: #0e2035;
-  --ink-soft: #4f6783;
+  --ink: #0a192f;
+  --ink-soft: #405b7a;
 
-  --bg: #eef3fa;
+  --bg: #f3f7fd;
   --surface: #ffffff;
-  --surface-2: #f4f8fd;
-  --surface-3: #eaf1f9;
+  --surface-2: #f8fbff;
+  --surface-3: #eff5fc;
 
-  --line: #cfdceb;
-  --line-strong: #afc2d9;
+  --line: #d1e2f3;
+  --line-strong: #b6cde5;
 
-  --danger: #b42318;
-  --ok: #0f766e;
+  --danger: #d92d20;
+  --ok: #0d8a7c;
 
-  --shadow-soft: 0 18px 36px rgba(7, 24, 49, 0.1);
-  --shadow-strong: 0 28px 64px rgba(7, 24, 49, 0.18);
-  --glow-accent: 0 0 0 1px rgba(50, 201, 255, 0.15), 0 0 22px rgba(50, 201, 255, 0.2);
+  --shadow-soft: 0 20px 40px rgba(5, 18, 40, 0.08);
+  --shadow-strong: 0 32px 72px rgba(5, 18, 40, 0.16);
+  --glow-accent: 0 0 0 2px rgba(0, 204, 255, 0.18), 0 0 24px rgba(0, 204, 255, 0.12);
 
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
 
-  --topbar-height: 74px;
+  --topbar-height: 76px;
 }
 
 * {
@@ -87,9 +89,9 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "Space Grotesk", "Manrope", sans-serif;
+  font-family: "Outfit", "Inter", sans-serif;
   margin: 0;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
 }
 
 #root {
@@ -104,6 +106,7 @@ h6 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {

@@ -12,6 +12,9 @@ const createPaged = (items: RecordItem[], page = 1, pageSize = 10) => ({
   totalPages: Math.max(1, Math.ceil(items.length / pageSize)),
 });
 
+const normalizeSearchValue = (value: string) => value.trim().toLowerCase();
+const normalizeDigits = (value: string) => value.replace(/\D/g, '');
+
 const setupApiMock = async (page: import('@playwright/test').Page) => {
   const people = new Map<string, RecordItem>();
 
@@ -362,7 +365,32 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
 
       if (segments.length === 2) {
         if (method === 'GET') {
-          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(createPaged(state.ced)) });
+          const search = url.searchParams.get('search') ?? '';
+          const pageParam = Number(url.searchParams.get('page') ?? '1');
+          const pageSizeParam = Number(url.searchParams.get('pageSize') ?? '10');
+          const normalizedSearch = normalizeSearchValue(search);
+          const filtered = !normalizedSearch
+            ? state.ced
+            : state.ced.filter((item) => {
+              const nome = normalizeSearchValue(String(item.nome ?? ''));
+              const cnpjCpf = normalizeDigits(String(item.cnpjCpf ?? ''));
+              return nome.includes(normalizedSearch) || cnpjCpf.includes(normalizeDigits(search));
+            });
+          const pageNumber = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+          const pageSizeNumber = Number.isFinite(pageSizeParam) && pageSizeParam > 0 ? pageSizeParam : 10;
+          const start = (pageNumber - 1) * pageSizeNumber;
+          const pageItems = filtered.slice(start, start + pageSizeNumber);
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              items: pageItems,
+              page: pageNumber,
+              pageSize: pageSizeNumber,
+              totalItems: filtered.length,
+              totalPages: Math.max(1, Math.ceil(filtered.length / pageSizeNumber)),
+            }),
+          });
           return;
         }
 
@@ -914,6 +942,7 @@ const runCrudBancosFull = async (page: import('@playwright/test').Page, suffix: 
 const runCrudCedentesFull = async (page: import('@playwright/test').Page, suffix: string) => {
   const nome = `Cedente ${suffix}`;
   await page.goto('/cadastro/cedentes');
+  await page.getByRole('button', { name: 'Ir para listagem' }).click();
   await page.getByRole('button', { name: 'Novo cedente' }).click();
 
   await page.locator('.modal-card label:has-text("CPF/CNPJ") input').first().fill('04.252.011/0001-10');
@@ -988,6 +1017,27 @@ test('crud cedentes', async ({ page }) => {
   await login(page);
   const suffix = Date.now().toString().slice(-5);
   await runCrudCedentesFull(page, suffix);
+});
+
+test('cedentes: landing abre listagem e preserva busca inicial', async ({ page }) => {
+  await login(page);
+  await page.goto('/cadastro/cedentes');
+
+  await expect(page.getByTestId('cedentes-landing')).toBeVisible();
+  await page.getByRole('button', { name: 'Ir para listagem' }).click();
+
+  await expect(page.getByPlaceholder('Buscar por nome, CPF/CNPJ, e-mail')).toBeVisible();
+  await expect(page.locator('.table-wrap')).toBeVisible();
+});
+
+test('cedentes: busca da landing abre detalhe em match unico', async ({ page }) => {
+  await login(page);
+  await page.goto('/cadastro/cedentes');
+
+  await page.getByLabel('Pesquisar cedente por nome ou CNPJ').fill('Cedente Seed');
+  await page.getByRole('button', { name: 'Pesquisar' }).click();
+
+  await expect(page).toHaveURL(/\/cadastro\/cedentes\/.+/);
 });
 
 test('importacoes: envia arquivo e abre detalhes', async ({ page }) => {

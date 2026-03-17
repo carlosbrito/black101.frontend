@@ -1,11 +1,25 @@
 .page-frame {
   width: 100%;
   box-sizing: border-box;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(247, 252, 255, 0.96) 100%);
-  border: 1px solid rgba(136, 172, 208, 0.5);
-  border-radius: 20px;
-  box-shadow: var(--shadow-soft);
-  padding: 1.08rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 251, 255, 0.85));
+  backdrop-filter: blur(16px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 24px;
+  box-shadow: 0 12px 32px rgba(10, 35, 62, 0.05), inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  padding: 1.25rem;
+  animation: pageFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.995);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .page-header {
@@ -18,11 +32,11 @@
   border-bottom: 1px solid rgba(173, 198, 223, 0.45);
 }
 
-.page-header > div:first-child {
+.page-header>div:first-child {
   min-width: 0;
 }
 
-.page-header > div:last-child {
+.page-header>div:last-child {
   display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
@@ -53,7 +67,7 @@
     align-items: stretch;
   }
 
-  .page-header > div:last-child {
+  .page-header>div:last-child {
     justify-content: flex-start;
   }
 

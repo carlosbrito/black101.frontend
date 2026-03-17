@@ -71,6 +71,8 @@
 .actions button:hover {
   border-color: #7eb4df;
   background: linear-gradient(180deg, #f8fcff, #e8f3ff);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(24, 72, 114, 0.1);
 }
 
 .actions .danger {
