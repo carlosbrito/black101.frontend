@@ -1,0 +1,14 @@
+name: Deploy VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, black101, deploy]
+
+    steps:
+      - name: Executar deploy
+        run: /root/openclaw/repo/black101/novo/deploy-black101.sh

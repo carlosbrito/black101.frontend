@@ -6,9 +6,11 @@ import { AuthProvider } from './app/auth/AuthContext';
 import { AppRouter } from './app/router/AppRouter';
 import './index.css';
 
+const routerBaseName = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={routerBaseName}>
       <AuthProvider>
         <AppRouter />
         <Toaster

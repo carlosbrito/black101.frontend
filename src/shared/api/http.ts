@@ -1,6 +1,25 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5287';
+const DEFAULT_API_BASE_URL = 'http://localhost:5287';
+
+const resolveApiBaseUrl = () => {
+  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (!configuredBaseUrl) {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  if (typeof window === 'undefined') {
+    return configuredBaseUrl;
+  }
+
+  try {
+    return new URL(configuredBaseUrl, window.location.origin).toString().replace(/\/$/, '');
+  } catch {
+    return DEFAULT_API_BASE_URL;
+  }
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 export const CONTEXTO_EMPRESA_HEADER = 'X-Contexto-Empresa-Id';
 
 export const http = axios.create({
