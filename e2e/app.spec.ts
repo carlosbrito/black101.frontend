@@ -76,6 +76,29 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
       dataOperacao: '2026-02-18T10:00:00Z',
       status: 'Aberta',
     }],
+    movimentacoes: [{
+      id: createId(),
+      tipoMovimento: 0,
+      pagamentoEfetuado: false,
+      valorDespesa: 1200,
+      valorPago: 0,
+      descricao: 'Pagamento financeiro Seed',
+      fornecededor: 'Fornecedor Seed',
+      conta: {
+        id: createId(),
+        descricao: 'Conta Seed',
+        banco: { codigo: 341 },
+        agencia: '1234',
+        numeroConta: '10001-9',
+      },
+      planoDeConta: { id: createId(), descricao: 'Plano Seed' },
+      cedente: { id: seededCedenteId, pessoa: { nome: 'Cedente Seed' } },
+      dataMovimento: '2026-03-18T10:00:00Z',
+      dataPagamento: null,
+      dataVencimento: '2026-03-19T00:00:00Z',
+      numeroReferencia: 'MOV-SEED-001',
+      dateCreated: '2026-03-18T10:00:00Z',
+    }],
     importacoes: [{
       id: createId(),
       fidcId: '00000000-0000-0000-0000-000000000001',
@@ -206,7 +229,7 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
       body: JSON.stringify({
         user: { id: '1', name: 'Administrador Black101', email: 'admin@black101.local' },
         roles: ['ADMIN'],
-        claims: ['CAD_ADM_L'],
+        claims: ['CAD_ADM_L', 'E_MFI', 'R_MFI', 'R_MFI_LOTE', 'E_MFI_BLT', 'W_RCT', 'E_MFI_BAI'],
       }),
     });
   };
@@ -1711,6 +1734,34 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
       return;
     }
 
+    if (path === '/MovimentoFinanceiro/get/list' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: state.movimentacoes,
+          page: 0,
+          pageSize: 100,
+          totalItems: state.movimentacoes.length,
+        }),
+      });
+      return;
+    }
+
+    if (path === '/MovimentoFinanceiro/get/saldoContas' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          state.movimentacoes.map((item) => ({
+            conta: item.conta,
+            valorSaldo: 15000 - Number(item.valorDespesa ?? item.valorPago ?? 0),
+          })),
+        ),
+      });
+      return;
+    }
+
     await route.fallback();
   });
 };
@@ -1831,6 +1882,8 @@ test('layout sem overflow horizontal global', async ({ page }) => {
 
   await assertNoPageHorizontalOverflow(page);
   await page.goto('/cadastro/administradoras');
+  await assertNoPageHorizontalOverflow(page);
+  await page.goto('/financeiro/movimentacoes');
   await assertNoPageHorizontalOverflow(page);
   await page.goto('/operacoes/importacoes');
   await assertNoPageHorizontalOverflow(page);

@@ -21,7 +21,7 @@
 | Login/autenticação | `/login` + 2FA + gettoken/context | `src/features/login/LoginPage.tsx` + `src/app/auth/AuthContext.tsx` | Parcial (2FA legado migrado) |
 | Cadastros | Módulo `register` | `src/features/cadastros/**` | Em andamento |
 | Operações | Módulo `operation` | `src/features/operacoes/**` | Em andamento |
-| Financeiro | Módulo `financial` | `src/features/financeiro/**` | Em andamento |
+| Financeiro | Módulo `financial` | `src/features/financeiro/**` | Parcial (movimentações migrado) |
 | Administrativo | Usuários/Grupos/Auditoria/Templates | `src/features/admin/**` | Em andamento |
 | Securitizadora | Debêntures/Contabilidade | `src/features/securitizadora/**` | Em andamento |
 
@@ -76,6 +76,11 @@
 - `src/features/cadastros/modalidades/ModalidadesListPage.tsx`
   - migração para consulta real via `/api/cedente/get/list` + `/api/cedente/get/modalidades`
   - CRUD dedicado removido (não há controller de `Modalidade` no backend atual)
+- `src/features/financeiro/MovimentacoesPage.tsx`
+- `src/features/financeiro/movimentacoes/**`
+  - módulo de movimentações financeiras migrado para React com lista, cards de saldo, filtros, criação/edição por tipo, exclusão individual, histórico, importação em duas etapas, exclusão/baixa/reabertura em lote, exportação e relatório
+  - cobertura Playwright dedicada em `e2e/financeiro-movimentacoes.spec.ts`
+  - pendências remanescentes concentradas em refinamento visual e eventuais ajustes finos de UX, sem gap funcional conhecido frente ao legado dentro do escopo migrado
 
 ## Gaps conhecidos
 - Ainda há cobertura E2E focada em API mock para muitos fluxos; backend real foi adicionado como smoke test inicial.
