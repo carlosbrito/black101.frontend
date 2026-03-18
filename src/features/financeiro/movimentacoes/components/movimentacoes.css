@@ -1,0 +1,27 @@
+.movimentacoes-balance-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-bottom: 1.5rem;
+}
+
+.movimentacoes-balance-card {
+  background: #ffffff;
+  border: 1px solid #d9e2ec;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1rem 1.2rem;
+}
+
+.movimentacoes-balance-card span {
+  color: #52606d;
+  font-size: 0.92rem;
+}
+
+.movimentacoes-balance-card b {
+  color: #102a43;
+  font-size: 1.05rem;
+}
