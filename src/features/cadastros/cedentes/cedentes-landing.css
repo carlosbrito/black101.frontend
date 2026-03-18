@@ -82,6 +82,34 @@
   margin-top: 1.8rem;
 }
 
+.cedentes-landing__eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.cedentes-landing__eyebrow-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0.38rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(251, 191, 36, 0.34);
+  color: #ffe4b0;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cedentes-landing__eyebrow-copy {
+  color: rgba(233, 241, 255, 0.74);
+  font-size: 0.92rem;
+}
+
 .cedentes-landing__copy h2 {
   margin: 0;
   color: #f9fbff;
@@ -107,6 +135,26 @@
   line-height: 1.7;
 }
 
+.cedentes-landing__highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.25rem;
+}
+
+.cedentes-landing__highlights span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0.36rem 0.78rem;
+  border-radius: 999px;
+  background: rgba(11, 23, 48, 0.52);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #d7e7ff;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .cedentes-landing__search {
   position: relative;
   z-index: 1;
@@ -117,6 +165,23 @@
   border: 1px solid rgba(114, 147, 208, 0.2);
   background: linear-gradient(180deg, rgba(17, 33, 74, 0.82), rgba(8, 19, 44, 0.88));
   backdrop-filter: blur(12px);
+}
+
+.cedentes-landing__search-topline {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.cedentes-landing__search-topline strong {
+  color: #fff8ea;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.cedentes-landing__search-topline span {
+  color: rgba(216, 228, 247, 0.72);
+  font-size: 0.84rem;
+  line-height: 1.55;
 }
 
 .cedentes-landing__search label {
@@ -148,6 +213,26 @@
   outline: none;
   border-color: rgba(103, 200, 255, 0.62);
   box-shadow: 0 0 0 4px rgba(87, 173, 255, 0.12);
+}
+
+.cedentes-landing__search-foot {
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.8rem 0.92rem;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(19, 35, 73, 0.92), rgba(10, 18, 42, 0.86));
+  border: 1px solid rgba(251, 191, 36, 0.16);
+}
+
+.cedentes-landing__search-foot strong {
+  color: #ffe3a3;
+  font-size: 0.84rem;
+}
+
+.cedentes-landing__search-foot span {
+  color: rgba(214, 226, 246, 0.74);
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
 .cedentes-landing__actions {
@@ -273,6 +358,14 @@
 
   .cedentes-landing__actions,
   .cedentes-landing__actions button {
+    width: 100%;
+  }
+
+  .cedentes-landing__eyebrow {
+    align-items: flex-start;
+  }
+
+  .cedentes-landing__highlights span {
     width: 100%;
   }
 

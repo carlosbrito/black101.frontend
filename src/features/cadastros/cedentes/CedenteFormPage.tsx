@@ -27,6 +27,7 @@ import {
 } from '../cadastroCommon';
 import '../cadastro.css';
 import '../administradoras/entity-form.css';
+import './cedente-premium.css';
 
 type TabKey =
   | 'cedente'
@@ -1931,6 +1932,10 @@ export const CedenteFormPage = () => {
     () => (isEdit ? `Cedente: ${pessoaForm.nome || 'Editar'}` : 'Novo Cedente'),
     [isEdit, pessoaForm.nome],
   );
+  const activeTabLabel = useMemo(
+    () => visibleTabs.find((tab) => tab.key === activeTab)?.label ?? 'Cedente',
+    [activeTab, visibleTabs],
+  );
 
   const changeTab = (key: TabKey) => {
     if (!canAccessSubTabs && key !== 'cedente') {
@@ -2846,33 +2851,73 @@ export const CedenteFormPage = () => {
       subtitle={isEdit ? 'Cadastro completo em tela cheia, com abas espelhando o legado.' : 'Novo cadastro de cedente com vínculo de pessoa.'}
       actions={<button className="btn-muted" onClick={() => navigate('/cadastro/cedentes')}>Voltar para listagem</button>}
     >
-      <div className="entity-meta-bar">
-        <span><strong>Pessoa:</strong> {pessoaId ?? 'Não vinculada'}</span>
-        <span><strong>Documento:</strong> {formatCpfCnpj(pessoaForm.cnpjCpf)}</span>
-        <span><strong>Status:</strong> {cedenteStatus}</span>
+      <div className="cedente-form-shell">
+        <section className="cedente-form-hero" data-testid="cedente-form-hero">
+          <div className="cedente-form-hero__top">
+            <div className="cedente-form-hero__copy">
+              <span className="cedente-form-hero__eyebrow">Comando premium</span>
+              <h2>{isEdit ? 'Leitura operacional do cadastro do cedente' : 'Novo cadastro com contexto operacional imediato'}</h2>
+              <p>
+                {isEdit
+                  ? 'Revise rapidamente identidade, status, etapa atual e abas disponíveis antes de entrar no detalhe operacional.'
+                  : 'Preencha os dados principais e acompanhe o contexto do cadastro desde o primeiro passo, sem perder a orientação do fluxo.'}
+              </p>
+            </div>
+            <span className="cedente-form-hero__status">{cedenteStatus || 'Sem status'}</span>
+          </div>
+
+          <div className="cedente-form-summary" data-testid="cedente-form-summary">
+            <article className="cedente-form-summary__card is-highlight">
+              <span>Documento</span>
+              <strong>{formatCpfCnpj(pessoaForm.cnpjCpf) || '-'}</strong>
+              <small>{isEdit ? 'Identidade principal do cadastro em edição.' : 'Será usado para consolidar o vínculo com a pessoa.'}</small>
+            </article>
+            <article className="cedente-form-summary__card">
+              <span>Pessoa vinculada</span>
+              <strong>{pessoaId ?? 'Ainda não vinculada'}</strong>
+              <small>{pessoaForm.nome ? pessoaForm.nome : 'Preencha o nome para consolidar a entidade principal.'}</small>
+            </article>
+            <article className="cedente-form-summary__card">
+              <span>Etapa atual</span>
+              <strong>{activeTabLabel}</strong>
+              <small>{canAccessSubTabs ? `${visibleTabs.length} abas liberadas para operação.` : 'Salve o cadastro para liberar as abas complementares.'}</small>
+            </article>
+            <article className="cedente-form-summary__card">
+              <span>Workflow</span>
+              <strong>{workflowActions.length > 0 ? `${workflowActions.length} ação(ões) disponível(is)` : 'Sem ação imediata'}</strong>
+              <small>{isEdit ? 'Contexto de aprovação alinhado ao legado.' : 'As ações de aprovação aparecem após a criação do cadastro.'}</small>
+            </article>
+          </div>
+        </section>
+
+        <div className="entity-meta-bar cedente-form-meta">
+          <span><strong>Pessoa:</strong> {pessoaId ?? 'Não vinculada'}</span>
+          <span><strong>Documento:</strong> {formatCpfCnpj(pessoaForm.cnpjCpf)}</span>
+          <span><strong>Status:</strong> {cedenteStatus}</span>
+        </div>
+
+        <div className="entity-tabs" role="tablist" aria-label="Abas de cadastro do cedente">
+          {visibleTabs.map((tab) => {
+            const disabled = !canAccessSubTabs && tab.key !== 'cedente';
+
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                className={`entity-tab-btn ${activeTab === tab.key ? 'is-active' : ''}`}
+                onClick={() => changeTab(tab.key)}
+                disabled={disabled}
+                aria-selected={activeTab === tab.key}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {loading ? <div className="entity-loading">Carregando cadastro...</div> : renderCurrentTab()}
       </div>
-
-      <div className="entity-tabs" role="tablist" aria-label="Abas de cadastro do cedente">
-        {visibleTabs.map((tab) => {
-          const disabled = !canAccessSubTabs && tab.key !== 'cedente';
-
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              className={`entity-tab-btn ${activeTab === tab.key ? 'is-active' : ''}`}
-              onClick={() => changeTab(tab.key)}
-              disabled={disabled}
-              aria-selected={activeTab === tab.key}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {loading ? <div className="entity-loading">Carregando cadastro...</div> : renderCurrentTab()}
       <EmpresaPickerDialog
         open={pickerOpen}
         options={contextEmpresas.filter((item) => selectedEmpresaIds.includes(item.id)).map((item) => ({ id: item.id, nome: item.nome }))}

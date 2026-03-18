@@ -9,6 +9,7 @@ import { PageFrame } from '../../../shared/ui/PageFrame';
 import { applyCpfCnpjMask, formatCpfCnpj, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../cadastroCommon';
 import '../cadastro.css';
 import './cedentes-landing.css';
+import './cedente-premium.css';
 
 type CedenteRow = {
   id: string;
@@ -146,7 +147,7 @@ const CedentesLanding = ({
   onNewCedente: () => void;
 }) => (
   <section className="cedentes-landing" data-testid="cedentes-landing">
-    <div className="cedentes-landing__hero">
+    <div className="cedentes-landing__hero" data-testid="cedentes-landing-panel">
       <div className="cedentes-landing__badge">Portal Black101</div>
       <div className="cedentes-landing__grid" aria-hidden="true" />
       <div className="cedentes-landing__mark" aria-hidden="true">
@@ -156,6 +157,10 @@ const CedentesLanding = ({
 
       <div className="cedentes-landing__content">
         <div className="cedentes-landing__copy">
+          <div className="cedentes-landing__eyebrow">
+            <span className="cedentes-landing__eyebrow-pill">Console premium</span>
+            <span className="cedentes-landing__eyebrow-copy">Cadastro, aprovação e acompanhamento em uma única entrada.</span>
+          </div>
           <h2>
             Gestão centralizada
             <br />
@@ -165,9 +170,18 @@ const CedentesLanding = ({
             Visualize indicadores-chave, localize rapidamente um cedente específico e entre na operação
             detalhada sem passar direto pela listagem tradicional.
           </p>
+          <div className="cedentes-landing__highlights">
+            <span>Leitura rápida de status</span>
+            <span>Busca direta por nome ou CNPJ</span>
+            <span>Abertura imediata do fluxo operacional</span>
+          </div>
         </div>
 
         <form className="cedentes-landing__search" onSubmit={onSubmit}>
+          <div className="cedentes-landing__search-topline">
+            <strong>Painel de acesso rápido</strong>
+            <span>Entre na listagem ou pule direto para um cadastro específico.</span>
+          </div>
           <label htmlFor="cedentes-landing-query">Pesquisar cedente por nome ou CNPJ</label>
           <div className="cedentes-landing__search-row">
             <input
@@ -179,6 +193,12 @@ const CedentesLanding = ({
             <button type="submit" className="btn-main" disabled={searching}>
               {searching ? 'Buscando...' : 'Pesquisar'}
             </button>
+          </div>
+          <div className="cedentes-landing__search-foot">
+            <div>
+              <strong>Modo recomendado</strong>
+              <span>Use a busca para abrir um cadastro único ou siga para a visão completa.</span>
+            </div>
           </div>
           <div className="cedentes-landing__actions">
             <button type="button" className="btn-muted" onClick={onSkip}>
@@ -283,22 +303,39 @@ const CedentesListSection = ({
 
   return (
     <>
-      <div className="cedentes-module-toolbar">
-        <div className="toolbar">
-          <input
-            placeholder="Buscar por nome, CPF/CNPJ, e-mail"
-            value={search}
-            onChange={(event) => {
-              setPage(1);
-              setSearch(event.target.value);
-            }}
-          />
-          <button className="btn-muted" type="button" onClick={onBackToLanding}>
-            Voltar para página principal
-          </button>
-          <button className="btn-main" type="button" onClick={onNewCedente}>
-            Novo cedente
-          </button>
+      <div className="cedentes-module-toolbar" data-testid="cedentes-list-toolbar">
+        <div className="cedentes-module-toolbar__summary">
+          <div>
+            <span className="cedentes-module-toolbar__eyebrow">Operação ativa</span>
+            <strong>Base completa de cedentes</strong>
+            <p>Filtre rapidamente a carteira, revise situações críticas e entre no detalhe sem trocar de contexto.</p>
+          </div>
+          <div className="cedentes-module-toolbar__badges" aria-hidden="true">
+            <span>Busca viva</span>
+            <span>Fluxo legado</span>
+            <span>Cadastro premium</span>
+          </div>
+        </div>
+        <div className="toolbar cedentes-module-toolbar__controls">
+          <div className="cedentes-module-toolbar__field">
+            <span>Busca operacional</span>
+            <input
+              placeholder="Buscar por nome, CPF/CNPJ, e-mail"
+              value={search}
+              onChange={(event) => {
+                setPage(1);
+                setSearch(event.target.value);
+              }}
+            />
+          </div>
+          <div className="cedentes-module-toolbar__actions">
+            <button className="btn-muted" type="button" onClick={onBackToLanding}>
+              Voltar para página principal
+            </button>
+            <button className="btn-main" type="button" onClick={onNewCedente}>
+              Novo cedente
+            </button>
+          </div>
         </div>
       </div>
 

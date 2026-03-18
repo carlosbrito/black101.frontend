@@ -2072,12 +2072,16 @@ const runCrudBancosFull = async (page: import('@playwright/test').Page, suffix: 
 const runCrudCedentesFull = async (page: import('@playwright/test').Page, suffix: string) => {
   const nome = `Cedente ${suffix}`;
   await page.goto('/cadastro/cedentes');
+  await expect(page.getByTestId('cedentes-landing-panel')).toBeVisible();
   await page.getByRole('button', { name: 'Ir para listagem' }).click();
+  await expect(page.getByTestId('cedentes-list-toolbar')).toBeVisible();
   await page.getByRole('button', { name: 'Novo cedente' }).click();
 
   await page.locator('.modal-card label:has-text("CPF/CNPJ") input').first().fill('04.252.011/0001-10');
   await page.getByRole('button', { name: 'Avançar' }).click();
   await expect(page).toHaveURL(/\/cadastro\/cedentes\//);
+  await expect(page.getByTestId('cedente-form-hero')).toBeVisible();
+  await expect(page.getByTestId('cedente-form-summary')).toBeVisible();
 
   await page.locator('label:has-text("Nome") input').first().fill(nome);
   await page.locator('label:has-text("E-mail") input').first().fill(`cedente${suffix}@mail.com`);
@@ -2195,9 +2199,11 @@ test('cedentes: landing abre listagem e preserva busca inicial', async ({ page }
   await page.goto('/cadastro/cedentes');
 
   await expect(page.getByTestId('cedentes-landing')).toBeVisible();
+  await expect(page.getByTestId('cedentes-landing-panel')).toBeVisible();
   await page.getByRole('button', { name: 'Ir para listagem' }).click();
 
   await expect(page.getByPlaceholder('Buscar por nome, CPF/CNPJ, e-mail')).toBeVisible();
+  await expect(page.getByTestId('cedentes-list-toolbar')).toBeVisible();
   await expect(page.locator('.table-wrap')).toBeVisible();
 });
 
