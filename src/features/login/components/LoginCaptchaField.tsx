@@ -20,6 +20,7 @@ declare global {
 }
 
 const TURNSTILE_SCRIPT_ID = 'cloudflare-turnstile-script';
+const LEGACY_LOCAL_TURNSTILE_SITE_KEY = '1x00000000000000000000AA';
 
 const ensureTurnstileScript = () =>
   new Promise<void>((resolve, reject) => {
@@ -60,7 +61,8 @@ export const LoginCaptchaField = ({
   onError: (error: string) => void;
   onExpired: () => void;
 }) => {
-  const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim();
+  const configuredSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim();
+  const siteKey = configuredSiteKey || (import.meta.env.DEV ? LEGACY_LOCAL_TURNSTILE_SITE_KEY : '');
   const useTestingFallback = import.meta.env.MODE === 'test' || (typeof navigator !== 'undefined' && navigator.webdriver);
   const fallbackId = useId();
   const containerRef = useRef<HTMLDivElement | null>(null);
