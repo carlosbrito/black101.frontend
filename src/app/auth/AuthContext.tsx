@@ -9,6 +9,7 @@ import {
   legacyAuthPath,
   setLegacyAccessToken,
 } from '../../shared/api/http';
+import { entraIdAuth } from '../../shared/services/entraIdAuth';
 import {
   SegmentoEmpresa,
   type AuthMeResponse,
@@ -26,10 +27,14 @@ type AuthContextValue = {
   isSecuritizadora: boolean;
   contextEmpresas: EmpresaContextItem[];
   selectedEmpresaIds: string[];
-  login: (email: string, password: string, rememberMe: boolean) => Promise<LoginResult>;
+  login: (email: string, password: string, rememberMe: boolean, captchaToken?: string | null) => Promise<LoginResult>;
+  loginWithMicrosoft: () => Promise<LoginResult>;
+  hasMicrosoftSso: boolean;
   completeLegacyTwoFactor: (input: CompleteLegacyTwoFactorInput) => Promise<void>;
   generateLegacyTwoFactorQrCode: (email: string, tipoAutenticacao2FA: TwoFactorAuthType) => Promise<string>;
   resendLegacyTwoFactorCode: (email: string) => Promise<boolean>;
+  sendLegacyEmailTwoFactorCode: (email: string) => Promise<void>;
+  getLegacyTwoFactorConfiguration: () => Promise<TwoFactorAuthType[]>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
   updateContextSelection: (empresaIds: string[]) => Promise<void>;
@@ -59,6 +64,7 @@ type LegacyLoginModel = {
 };
 
 export type TwoFactorAuthType = 1 | 2;
+export type LegacyEmailTwoFactorType = 3;
 
 export type LoginResult =
   | { status: 'authenticated' }
@@ -75,7 +81,11 @@ type CompleteLegacyTwoFactorInput = {
   email: string;
   code: string;
   resetKey: boolean;
-  tipoAutenticacao2FA: TwoFactorAuthType;
+  tipoAutenticacao2FA: TwoFactorAuthType | LegacyEmailTwoFactorType;
+};
+
+type LegacyTwoFactorConfigurationResponse = {
+  tiposAtivados?: number[];
 };
 
 type LegacyUserContext = {
@@ -257,10 +267,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await refreshMe();
   }, [refreshMe]);
 
-  const login = useCallback(async (email: string, password: string, rememberMe: boolean) => {
+  const login = useCallback(async (email: string, password: string, rememberMe: boolean, captchaToken?: string | null) => {
     try {
       await ensureCsrfToken();
-      await http.post(authPath('login'), { email, password, rememberMe });
+      await http.post(authPath('login'), {
+        email,
+        password,
+        rememberMe,
+        cloudflareCaptchaToken: captchaToken ?? undefined,
+      });
       await refreshMe();
       return { status: 'authenticated' } satisfies LoginResult;
     } catch (modernError) {
@@ -275,6 +290,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email,
         password,
         rememberMe,
+        cloudflareCaptchaToken: captchaToken ?? undefined,
       });
       const loginModel = unwrapModel(loginResponse.data);
       if (loginModel.requiresTwoFactorCode || loginModel.requiresTwoFactorSetup || loginModel.qrCode) {
@@ -298,6 +314,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       throw new Error(getErrorMessage(legacyError));
     }
   }, [exchangeLegacyTokenAndRefresh, refreshMe]);
+
+  const loginWithMicrosoft = useCallback(async () => {
+    try {
+      const result = await entraIdAuth.loginPopup();
+      const idToken = result?.idToken ?? '';
+      if (!idToken) {
+        throw new Error('Não foi possível obter o token do Microsoft Entra ID.');
+      }
+
+      const response = await http.post<LegacyEnvelope<LegacyLoginModel>>(legacyAuthPath('login-entra'), { idToken });
+      const loginModel = unwrapModel(response.data);
+      if (loginModel.requiresTwoFactorCode || loginModel.requiresTwoFactorSetup || loginModel.qrCode) {
+        return {
+          status: 'two_factor_required',
+          challenge: {
+            email: '',
+            qrCode: loginModel.qrCode ?? '',
+            requiresTwoFactorSetup: !!loginModel.requiresTwoFactorSetup,
+          },
+        } satisfies LoginResult;
+      }
+
+      if (loginModel.token) {
+        setLegacyAccessToken(loginModel.token);
+      }
+
+      await exchangeLegacyTokenAndRefresh();
+      return { status: 'authenticated' } satisfies LoginResult;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }, [exchangeLegacyTokenAndRefresh]);
 
   const completeLegacyTwoFactor = useCallback(async (input: CompleteLegacyTwoFactorInput) => {
     const response = await http.post<LegacyEnvelope<unknown>>(legacyAuthPath('validateQrcode'), {
@@ -328,6 +376,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const response = await http.post<LegacyEnvelope<{ reenviado?: boolean }>>(legacyAuthPath('reset-totp'), { email });
     const model = unwrapModel(response.data);
     return !!model?.reenviado;
+  }, []);
+
+  const sendLegacyEmailTwoFactorCode = useCallback(async (email: string) => {
+    await http.post('/authentication/two-factor/email/envio', { email });
+  }, []);
+
+  const getLegacyTwoFactorConfiguration = useCallback(async (): Promise<TwoFactorAuthType[]> => {
+    const response = await http.get<LegacyEnvelope<LegacyTwoFactorConfigurationResponse>>('/authentication/two-factor/configuration');
+    const model = unwrapModel(response.data);
+    return (model?.tiposAtivados ?? []).filter((value): value is TwoFactorAuthType => value === 1 || value === 2);
   }, []);
 
   const logout = useCallback(async () => {
@@ -378,25 +436,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     user,
     roles,
     claims,
+    hasMicrosoftSso: entraIdAuth.hasValidConfiguration(),
     segmentoEmpresa,
     isSecuritizadora: segmentoEmpresa === SegmentoEmpresa.Securitizadora,
     contextEmpresas,
     selectedEmpresaIds,
     login,
+    loginWithMicrosoft,
     completeLegacyTwoFactor,
     generateLegacyTwoFactorQrCode,
     resendLegacyTwoFactorCode,
+    sendLegacyEmailTwoFactorCode,
+    getLegacyTwoFactorConfiguration,
     logout,
     refreshMe,
     updateContextSelection,
   }), [
     claims,
     contextEmpresas,
+    getLegacyTwoFactorConfiguration,
     loading,
     login,
+    loginWithMicrosoft,
     completeLegacyTwoFactor,
     generateLegacyTwoFactorQrCode,
     resendLegacyTwoFactorCode,
+    sendLegacyEmailTwoFactorCode,
     logout,
     refreshMe,
     roles,
