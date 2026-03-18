@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../../shared/api/http';
 import { PageFrame } from '../../../shared/ui/PageFrame';
@@ -16,6 +16,16 @@ import {
   type CadastroObservacaoDto,
   type HistoricoItemDto,
 } from '../cadastroCommon';
+import {
+  LegacyAssociationType,
+  createLegacyObservation,
+  listLegacyAttachments,
+  listLegacyHistory,
+  listLegacyObservations,
+  removeLegacyAttachment,
+  removeLegacyObservation,
+  uploadLegacyAttachment,
+} from '../legacySubtabApi';
 import '../cadastro.css';
 import '../administradoras/entity-form.css';
 
@@ -32,16 +42,47 @@ type FormState = {
   ativo: boolean;
 };
 
-const segmentoEmpresaOptions = [
-  { value: '0', label: 'FIDC' },
-  { value: '1', label: 'Securitizadora' },
-  { value: '2', label: 'Factoring' },
-  { value: '3', label: 'Outros' },
-];
+type PessoaDto = {
+  id?: string;
+  nome?: string | null;
+  cnpjCpf?: string | null;
+  email?: string | null;
+  telefone?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  ativo?: boolean;
+};
+
+type FIDCLoadedDto = Record<string, unknown> & {
+  id?: string | null;
+  pessoaId?: string | null;
+  pessoa?: PessoaDto | null;
+  nome?: string | null;
+  documento?: string | null;
+  cnpjCpf?: string | null;
+  email?: string | null;
+  telefone?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  ativo?: boolean;
+  segmentoEmpresa?: string | number | null;
+  segmento?: string | number | null;
+  fidcParametrizacoes?: unknown;
+  parametrizacoes?: unknown;
+  parametrizacao?: unknown;
+  items?: unknown;
+  records?: unknown;
+};
 
 type ModalidadeDto = { id: string; nome: string; codigo: string; ativo: boolean };
 type ParamForm = Record<string, string | boolean>;
 type MetricInputKind = 'currency' | 'percentage' | 'decimal' | 'integer' | 'text';
+type ParametrizacaoItem = Record<string, unknown> & {
+  id?: string;
+  modalidadeId?: string | null;
+  modalidadeNome?: string | null;
+  nomeModalidade?: string | null;
+};
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: 'cadastro', label: 'Cadastro' },
@@ -51,12 +92,14 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: 'historico', label: 'Histórico' },
 ];
 
-const numericDecimalKeys = [
-  'limite', 'tranche', 'float', 'fator', 'feeTerceiros',
-  'multaBaixa', 'multaBaixaCheque', 'multaRecompra', 'encargoBaixa', 'encargoBaixaCheque', 'encargoRecompra',
-  'prorrogacao', 'tarifaProrrogacao', 'tarifaRecompra', 'antecipacao', 'tarifaAntecipacao',
-  'taxaMinima', 'taxaMaxima', 'limiteMinimoSacado', 'limiteMaximoSacado',
-] as const;
+const segmentoEmpresaOptions = [
+  { value: '0', label: 'FIDC' },
+  { value: '1', label: 'Securitizadora' },
+  { value: '2', label: 'Factoring' },
+  { value: '3', label: 'Outros' },
+];
+
+const numericDecimalKeys = ['limite', 'tranche', 'float', 'fator', 'feeTerceiros', 'multaBaixa', 'multaBaixaCheque', 'multaRecompra', 'encargoBaixa', 'encargoBaixaCheque', 'encargoRecompra', 'prorrogacao', 'tarifaProrrogacao', 'tarifaRecompra', 'antecipacao', 'tarifaAntecipacao', 'taxaMinima', 'taxaMaxima', 'limiteMinimoSacado', 'limiteMaximoSacado'] as const;
 const numericIntKeys = ['prazoMinimo', 'prazoMaximo', 'tipoBanco'] as const;
 const stringNullableKeys = ['fidcParametrizacaoCalculoId', 'contaCobrancaPadraoId', 'meioRecebimentoPadrao', 'classificacaoId'] as const;
 const currencyMetricKeys = ['limite', 'tranche', 'tarifaProrrogacao', 'tarifaAntecipacao', 'tarifaRecompra', 'limiteMinimoSacado', 'limiteMaximoSacado'] as const;
@@ -114,10 +157,7 @@ const receiveMediumFlags: Array<{ key: string; label: string }> = [
   { key: 'isCartaoCredito', label: 'Cartão de Crédito' },
 ];
 
-const allBooleanFlags = [
-  ...receivedTypeFlags.map((x) => x.key),
-  ...receiveMediumFlags.map((x) => x.key),
-] as const;
+const allBooleanFlags = [...receivedTypeFlags.map((x) => x.key), ...receiveMediumFlags.map((x) => x.key)] as const;
 
 const metricLabels: Array<{ key: string; label: string; kind: MetricInputKind }> = [
   { key: 'limite', label: 'Limite', kind: 'currency' },
@@ -149,20 +189,14 @@ const metricLabels: Array<{ key: string; label: string; kind: MetricInputKind }>
   { key: 'classificacaoId', label: 'Classificação ID', kind: 'text' },
 ];
 
+const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
+
 const buildDefaultParamForm = (): ParamForm => {
   const form: ParamForm = { modalidadeId: '' };
-  numericDecimalKeys.forEach((key) => {
-    form[key] = '';
-  });
-  numericIntKeys.forEach((key) => {
-    form[key] = '';
-  });
-  stringNullableKeys.forEach((key) => {
-    form[key] = '';
-  });
-  allBooleanFlags.forEach((key) => {
-    form[key] = false;
-  });
+  numericDecimalKeys.forEach((key) => { form[key] = ''; });
+  numericIntKeys.forEach((key) => { form[key] = ''; });
+  stringNullableKeys.forEach((key) => { form[key] = ''; });
+  allBooleanFlags.forEach((key) => { form[key] = false; });
   return form;
 };
 
@@ -174,42 +208,31 @@ const brCurrencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', 
 const brDecimalFormatter = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 
 const clampPercentage = (value: number) => Math.min(99.9999, Math.max(0, value));
-
 const parseDecimal = (value: string) => {
   if (!value.trim()) return null;
-  const normalized = value
-    .replace(/R\$\s?/g, '')
-    .replace('%', '')
-    .replace(/\s/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
+  const normalized = value.replace(/R\$\s?/g, '').replace('%', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 };
-
 const parseInteger = (value: string) => {
   if (!value.trim()) return null;
   const parsed = Number.parseInt(value.replace(/\D/g, ''), 10);
   return Number.isFinite(parsed) ? parsed : null;
 };
-
 const formatCurrencyFromNumber = (value: number | null | undefined) => (value === null || value === undefined ? '' : brCurrencyFormatter.format(value));
 const formatPercentageFromNumber = (value: number | null | undefined) => (value === null || value === undefined ? '' : `${brDecimalFormatter.format(clampPercentage(value))}%`);
 const formatDecimalFromNumber = (value: number | null | undefined) => (value === null || value === undefined ? '' : brDecimalFormatter.format(value));
-
 const maskCurrencyInput = (value: string) => {
   const digits = value.replace(/\D/g, '');
   if (!digits) return '';
   return brCurrencyFormatter.format(Number(digits) / 100);
 };
-
 const maskPercentageInput = (value: string) => {
   const digits = value.replace(/\D/g, '');
   if (!digits) return '';
   const numeric = clampPercentage(Number(digits) / 10000);
   return `${brDecimalFormatter.format(numeric)}%`;
 };
-
 const maskDecimalInput = (value: string) => {
   const sanitized = value.replace(/[^\d,.-]/g, '').replace(',', '.');
   if (!sanitized) return '';
@@ -217,11 +240,44 @@ const maskDecimalInput = (value: string) => {
   if (!Number.isFinite(parsed)) return '';
   return brDecimalFormatter.format(parsed);
 };
-
 const maskIntegerInput = (value: string) => value.replace(/\D/g, '');
+const toText = (value: unknown) => (value === null || value === undefined ? '' : String(value));
+const isPresentId = (value: unknown) => typeof value === 'string' && value.trim() !== '' && value !== EMPTY_GUID;
+const asRecord = (value: unknown): Record<string, unknown> => (value && typeof value === 'object' ? (value as Record<string, unknown>) : {});
+
+const extractParametrizacoes = (data: unknown): ParametrizacaoItem[] => {
+  if (Array.isArray(data)) return data as ParametrizacaoItem[];
+  const record = asRecord(data);
+  const candidates = [record.fidcParametrizacoes, record.parametrizacoes, record.parametrizacao, record.items, record.records, record.Items, record.Records];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate as ParametrizacaoItem[];
+    if (candidate && typeof candidate === 'object') {
+      const paged = readPagedResponse<ParametrizacaoItem>(candidate);
+      if (paged.items.length > 0) return paged.items;
+    }
+  }
+  return [];
+};
+
+const buildPessoaPayload = (form: FormState) => ({
+  nome: form.nome.trim(),
+  cnpjCpf: sanitizeDocument(form.documento),
+  email: form.email.trim() || null,
+  telefone: form.telefone.trim() || null,
+  cidade: form.cidade.trim() || null,
+  uf: form.uf.trim() || null,
+  ativo: form.ativo,
+});
+
+const buildFidcCreatePayload = (pessoaId: string, form: FormState) => ({
+  pessoaId,
+  segmentoEmpresa: Number(form.segmentoEmpresa),
+  ativo: form.ativo,
+});
 
 export const EmpresaFormPage = () => {
   const params = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const cadastroId = params.id;
   const isEdit = !!cadastroId;
@@ -229,91 +285,100 @@ export const EmpresaFormPage = () => {
   const [loading, setLoading] = useState<boolean>(isEdit);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('cadastro');
-  const [form, setForm] = useState<FormState>({
-    nome: '',
-    documento: '',
-    email: '',
-    telefone: '',
-    cidade: '',
-    uf: '',
-    segmentoEmpresa: '',
-    ativo: true,
-  });
+  const [form, setForm] = useState<FormState>({ nome: '', documento: '', email: '', telefone: '', cidade: '', uf: '', segmentoEmpresa: '', ativo: true });
+  const [personId, setPersonId] = useState<string | null>(null);
   const [anexosRows, setAnexosRows] = useState<CadastroArquivoDto[]>([]);
   const [anexoFile, setAnexoFile] = useState<File | null>(null);
   const [observacoesRows, setObservacoesRows] = useState<CadastroObservacaoDto[]>([]);
   const [textoObservacao, setTextoObservacao] = useState('');
-  const [historicoPaged, setHistoricoPaged] = useState({
-    items: [] as HistoricoItemDto[],
-    page: 1,
-    pageSize: 20,
-    totalItems: 0,
-    totalPages: 1,
-  });
+  const [historicoPaged, setHistoricoPaged] = useState({ items: [] as HistoricoItemDto[], page: 1, pageSize: 20, totalItems: 0, totalPages: 1 });
   const [modalidades, setModalidades] = useState<ModalidadeDto[]>([]);
-  const [parametrizacoes, setParametrizacoes] = useState<any[]>([]);
+  const [parametrizacoes, setParametrizacoes] = useState<ParametrizacaoItem[]>([]);
   const [parametrizacaoId, setParametrizacaoId] = useState<string | null>(null);
   const [parametrizacaoForm, setParametrizacaoForm] = useState<ParamForm>(buildDefaultParamForm);
   const [savingParametrizacao, setSavingParametrizacao] = useState(false);
 
-  const canAccessSubTabs = isEdit;
+  const canAccessSubTabs = isEdit && Boolean(personId);
 
-  const loadSubTabs = async (id: string) => {
-    const [anexosRes, observacoesRes, historicoRes, modalidadesRes, parametrizacaoRes] = await Promise.all([
-      http.get(`/cadastros/empresas/${id}/anexos`),
-      http.get(`/cadastros/empresas/${id}/observacoes`),
-      http.get(`/cadastros/empresas/${id}/historico`, { params: { page: 1, pageSize: 20 } }),
-      http.get('/cadastros/modalidades', { params: { page: 1, pageSize: 200 } }),
-      http.get(`/cadastros/empresas/${id}/parametrizacao`),
-    ]);
-
-    setAnexosRows((anexosRes.data as CadastroArquivoDto[]) ?? []);
-    setObservacoesRows((observacoesRes.data as CadastroObservacaoDto[]) ?? []);
-    setHistoricoPaged(readPagedResponse<HistoricoItemDto>(historicoRes.data));
+  const loadReferenceData = async () => {
+    const modalidadesRes = await http.get('/cadastros/modalidades', { params: { page: 1, pageSize: 200 } });
     const modalidadesPaged = readPagedResponse<ModalidadeDto>(modalidadesRes.data);
     setModalidades(modalidadesPaged.items.filter((item) => item.ativo));
-    setParametrizacoes((parametrizacaoRes.data as any[]) ?? []);
   };
 
-  const loadHistorico = async (id: string, page: number) => {
-    const historicoRes = await http.get(`/cadastros/empresas/${id}/historico`, {
-      params: { page, pageSize: historicoPaged.pageSize },
+  const applyPessoaOnForm = (item: FIDCLoadedDto) => {
+    const pessoa = asRecord(item.pessoa);
+    const resolvedPessoaId = toText(pessoa.id ?? item.pessoaId);
+    setPersonId(isPresentId(resolvedPessoaId) ? resolvedPessoaId : null);
+    setForm({
+      nome: toText(pessoa.nome ?? item.nome),
+      documento: applyCpfCnpjMask(toText(pessoa.cnpjCpf ?? item.cnpjCpf ?? item.documento)),
+      email: toText(pessoa.email ?? item.email),
+      telefone: applyPhoneMask(toText(pessoa.telefone ?? item.telefone)),
+      cidade: toText(pessoa.cidade ?? item.cidade),
+      uf: toText(pessoa.uf ?? item.uf),
+      segmentoEmpresa: toText(item.segmentoEmpresa ?? item.segmento),
+      ativo: Boolean(pessoa.ativo ?? item.ativo ?? true),
     });
-    setHistoricoPaged(readPagedResponse<HistoricoItemDto>(historicoRes.data));
+    setParametrizacoes(extractParametrizacoes(item));
+    setParametrizacaoId(null);
+    setParametrizacaoForm(buildDefaultParamForm());
+    return isPresentId(resolvedPessoaId) ? resolvedPessoaId : null;
   };
 
-  const reloadParametrizacao = async (id: string) => {
-    const [modalidadesRes, parametrizacaoRes] = await Promise.all([
-      http.get('/cadastros/modalidades', { params: { page: 1, pageSize: 200 } }),
-      http.get(`/cadastros/empresas/${id}/parametrizacao`),
-    ]);
-    const modalidadesPaged = readPagedResponse<ModalidadeDto>(modalidadesRes.data);
-    setModalidades(modalidadesPaged.items.filter((item) => item.ativo));
-    setParametrizacoes((parametrizacaoRes.data as any[]) ?? []);
+  const loadBundle = async (id: string, associationId?: string | null) => {
+    const fidcRes = await http.get(`/api/fidc/get/unique/${id}`);
+    const resolvedAssociationId = associationId ?? applyPessoaOnForm(fidcRes.data as FIDCLoadedDto) ?? null;
+    const anexosPromise = resolvedAssociationId ? listLegacyAttachments(resolvedAssociationId, LegacyAssociationType.FIDC) : Promise.resolve([] as CadastroArquivoDto[]);
+    const observacoesPromise = resolvedAssociationId ? listLegacyObservations(resolvedAssociationId, LegacyAssociationType.FIDC) : Promise.resolve([] as CadastroObservacaoDto[]);
+    const historicoPromise = resolvedAssociationId ? listLegacyHistory(resolvedAssociationId, LegacyAssociationType.FIDC, 1, 20) : Promise.resolve({ items: [] as HistoricoItemDto[], page: 1, pageSize: 20, totalItems: 0, totalPages: 1 });
+    const [anexosRes, observacoesRes, historicoRes] = await Promise.all([anexosPromise, observacoesPromise, historicoPromise, loadReferenceData()]);
+    setAnexosRows(anexosRes);
+    setObservacoesRows(observacoesRes);
+    setHistoricoPaged(historicoRes);
+  };
+
+  const loadHistorico = async (associationId: string, page: number) => {
+    const historicoRes = await listLegacyHistory(associationId, LegacyAssociationType.FIDC, page, historicoPaged.pageSize);
+    setHistoricoPaged(historicoRes);
   };
 
   useEffect(() => {
     const bootstrap = async () => {
       if (!cadastroId) {
+        const documento = sanitizeDocument(searchParams.get('documento') ?? '');
+        if (documento) {
+          try {
+            const pessoaResponse = await http.get<PessoaDto>(`/api/pessoa/get/cnpjcpf/${documento}`, {
+              params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
+            });
+            const pessoa = pessoaResponse.data;
+            if (isPresentId(pessoa?.id)) {
+              setPersonId(pessoa.id ?? null);
+              setForm({
+                nome: pessoa?.nome ?? '',
+                documento: applyCpfCnpjMask(pessoa?.cnpjCpf ?? documento),
+                email: pessoa?.email ?? '',
+                telefone: applyPhoneMask(pessoa?.telefone ?? ''),
+                cidade: pessoa?.cidade ?? '',
+                uf: pessoa?.uf ?? '',
+                segmentoEmpresa: '',
+                ativo: pessoa?.ativo ?? true,
+              });
+            } else {
+              setForm((current) => ({ ...current, documento: applyCpfCnpjMask(documento) }));
+            }
+          } catch (error) {
+            toast.error(getErrorMessage(error));
+          }
+        }
         setLoading(false);
         return;
       }
 
       setLoading(true);
       try {
-        const response = await http.get(`/cadastros/empresas/${cadastroId}`);
-        const item = response.data as any;
-        setForm({
-          nome: item.nome ?? '',
-          documento: applyCpfCnpjMask(item.documento ?? ''),
-          email: item.email ?? '',
-          telefone: applyPhoneMask(item.telefone ?? ''),
-          cidade: item.cidade ?? '',
-          uf: item.uf ?? '',
-          segmentoEmpresa: item.segmentoEmpresa === null || item.segmentoEmpresa === undefined ? '' : String(item.segmentoEmpresa),
-          ativo: item.ativo,
-        });
-        await loadSubTabs(cadastroId);
+        await loadBundle(cadastroId);
       } catch (error) {
         toast.error(getErrorMessage(error));
       } finally {
@@ -322,12 +387,14 @@ export const EmpresaFormPage = () => {
     };
 
     void bootstrap();
-  }, [cadastroId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cadastroId, searchParams]);
 
   useEffect(() => {
-    if (!cadastroId || activeTab !== 'historico') return;
-    void loadHistorico(cadastroId, historicoPaged.page);
-  }, [cadastroId, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!personId || activeTab !== 'historico') return;
+    void loadHistorico(personId, historicoPaged.page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personId, activeTab]);
 
   const ensureValidForm = () => {
     if (!form.nome.trim()) {
@@ -349,55 +416,61 @@ export const EmpresaFormPage = () => {
     return true;
   };
 
-  const onSave = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!ensureValidForm()) return;
+  const upsertPessoa = async () => {
+    const document = sanitizeDocument(form.documento);
+    const pessoaByDocumentResponse = await http.get<PessoaDto>(`/api/pessoa/get/cnpjcpf/${document}`, {
+      params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
+    });
+    const found = pessoaByDocumentResponse.data;
+    const foundId = isPresentId(found?.id) ? found?.id ?? null : null;
+    const payload = buildPessoaPayload(form);
 
-    setSaving(true);
-    try {
-      const payload = {
-        nome: form.nome.trim(),
-        documento: sanitizeDocument(form.documento),
-        email: form.email.trim() || null,
-        telefone: form.telefone.trim() || null,
-        cidade: form.cidade.trim() || null,
-        uf: form.uf.trim() || null,
-        segmentoEmpresa: Number(form.segmentoEmpresa),
-        ativo: form.ativo,
-      };
-
-      if (cadastroId) {
-        await http.put(`/cadastros/empresas/${cadastroId}`, payload);
-        toast.success('Empresa atualizada.');
-      } else {
-        const response = await http.post('/cadastros/empresas', payload);
-        const created = response.data as { id: string };
-        toast.success('Empresa criada.');
-        navigate(`/cadastro/empresas/${created.id}`, { replace: true });
-      }
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setSaving(false);
+    if (foundId) {
+      await http.put('/api/pessoa/update', { id: foundId, ...payload });
+      return foundId;
     }
+
+    const createResponse = await http.post('/api/pessoa/register', payload);
+    const created = createResponse.data as Record<string, unknown>;
+    const createdId = toText(created.id ?? created.Id ?? '');
+    if (!createdId) {
+      throw new Error('Não foi possível criar a pessoa.');
+    }
+
+    return createdId;
   };
 
-  const currentTitle = useMemo(() => (isEdit ? `Empresa: ${form.nome || 'Editar'}` : 'Nova Empresa'), [isEdit, form.nome]);
-
-  const changeTab = (key: TabKey) => {
-    if (!canAccessSubTabs && key !== 'cadastro') {
-      toast('Salve a empresa para liberar as abas complementares.');
-      return;
-    }
-    setActiveTab(key);
+  const buildParametrizacaoPayload = () => {
+    const payload: Record<string, unknown> = { modalidadeId: parametrizacaoForm.modalidadeId };
+    allBooleanFlags.forEach((key) => { payload[key] = Boolean(parametrizacaoForm[key]); });
+    numericDecimalKeys.forEach((key) => {
+      const parsed = parseDecimal(String(parametrizacaoForm[key] ?? ''));
+      payload[key] = parsed === null ? null : percentageMetricSet.has(key) ? clampPercentage(parsed) : parsed;
+    });
+    numericIntKeys.forEach((key) => { payload[key] = parseInteger(String(parametrizacaoForm[key] ?? '')); });
+    stringNullableKeys.forEach((key) => {
+      const value = String(parametrizacaoForm[key] ?? '').trim();
+      payload[key] = value || null;
+    });
+    return payload;
   };
 
-  const applyParametrizacao = (item: any) => {
+  const replaceParametrizacaoList = (nextItem: ParametrizacaoItem) => {
+    const currentId = parametrizacaoId ? String(parametrizacaoId) : '';
+    const currentModalidadeId = String(parametrizacaoForm.modalidadeId ?? '');
+    const nextList = parametrizacoes.filter((item) => {
+      const itemId = String(item.id ?? '');
+      const itemModalidadeId = String(item.modalidadeId ?? '');
+      return !((currentId && itemId === currentId) || (!currentId && currentModalidadeId && itemModalidadeId === currentModalidadeId));
+    });
+    nextList.push(nextItem);
+    return nextList;
+  };
+
+  const applyParametrizacao = (item: ParametrizacaoItem) => {
     const next = buildDefaultParamForm();
     next.modalidadeId = String(item.modalidadeId ?? '');
-    allBooleanFlags.forEach((key) => {
-      next[key] = Boolean(item[key]);
-    });
+    allBooleanFlags.forEach((key) => { next[key] = Boolean(item[key]); });
     numericDecimalKeys.forEach((key) => {
       const value = item[key];
       if (value === null || value === undefined) {
@@ -424,43 +497,23 @@ export const EmpresaFormPage = () => {
       next[key] = value === null || value === undefined ? '' : String(value);
     });
     stringNullableKeys.forEach((key) => {
-      next[key] = item[key] ?? '';
+      next[key] = item[key] === null || item[key] === undefined ? '' : String(item[key]);
     });
-    setParametrizacaoId(String(item.id));
+    setParametrizacaoId(String(item.id ?? ''));
     setParametrizacaoForm(next);
   };
 
   const changeModalidade = (modalidadeId: string) => {
-    const existing = parametrizacoes.find((item) => item.modalidadeId === modalidadeId);
+    const existing = parametrizacoes.find((item) => String(item.modalidadeId ?? '') === modalidadeId);
     if (existing) {
       applyParametrizacao(existing);
       return;
     }
+
     setParametrizacaoId(null);
     const next = buildDefaultParamForm();
     next.modalidadeId = modalidadeId;
     setParametrizacaoForm(next);
-  };
-
-  const buildPayload = () => {
-    const payload: Record<string, unknown> = {
-      modalidadeId: parametrizacaoForm.modalidadeId,
-    };
-    allBooleanFlags.forEach((key) => {
-      payload[key] = Boolean(parametrizacaoForm[key]);
-    });
-    numericDecimalKeys.forEach((key) => {
-      const parsed = parseDecimal(String(parametrizacaoForm[key] ?? ''));
-      payload[key] = parsed === null ? null : percentageMetricSet.has(key) ? clampPercentage(parsed) : parsed;
-    });
-    numericIntKeys.forEach((key) => {
-      payload[key] = parseInteger(String(parametrizacaoForm[key] ?? ''));
-    });
-    stringNullableKeys.forEach((key) => {
-      const value = String(parametrizacaoForm[key] ?? '').trim();
-      payload[key] = value || null;
-    });
-    return payload;
   };
 
   const updateMetricValue = (key: string, kind: MetricInputKind, rawValue: string) => {
@@ -473,7 +526,7 @@ export const EmpresaFormPage = () => {
   };
 
   const saveParametrizacao = async () => {
-    if (!cadastroId) return;
+    if (!cadastroId || !personId) return;
     if (!String(parametrizacaoForm.modalidadeId || '')) {
       toast.error('Selecione uma modalidade.');
       return;
@@ -481,17 +534,19 @@ export const EmpresaFormPage = () => {
 
     setSavingParametrizacao(true);
     try {
-      const payload = buildPayload();
-      if (parametrizacaoId) {
-        await http.put(`/cadastros/empresas/${cadastroId}/parametrizacao/${parametrizacaoId}`, payload);
-        toast.success('Parametrização atualizada.');
-      } else {
-        const response = await http.post(`/cadastros/empresas/${cadastroId}/parametrizacao`, payload);
-        const created = response.data as { id: string };
-        setParametrizacaoId(created.id);
-        toast.success('Parametrização criada.');
-      }
-      await reloadParametrizacao(cadastroId);
+      const payload = buildParametrizacaoPayload();
+      const existing = parametrizacoes.find((item) => {
+        const itemId = String(item.id ?? '');
+        const itemModalidadeId = String(item.modalidadeId ?? '');
+        return (parametrizacaoId && itemId === String(parametrizacaoId)) || itemModalidadeId === String(parametrizacaoForm.modalidadeId);
+      });
+      const nextItem = { ...(existing ?? {}), ...payload } as ParametrizacaoItem;
+      const nextList = replaceParametrizacaoList(nextItem);
+      await http.put('/api/fidc/parametrizacao', { id: cadastroId, fidcParametrizacoes: nextList });
+      setParametrizacoes(nextList);
+      setParametrizacaoId(String(nextItem.id ?? existing?.id ?? ''));
+      toast.success('Parametrização atualizada.');
+      await loadBundle(cadastroId, personId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -499,16 +554,122 @@ export const EmpresaFormPage = () => {
     }
   };
 
-  const removeParametrizacao = async (item: any) => {
-    if (!cadastroId || !window.confirm(`Remover parametrização de '${item.modalidadeNome}'?`)) return;
+  const removeParametrizacao = async (item: ParametrizacaoItem) => {
+    if (!cadastroId || !personId || !window.confirm(`Remover parametrização de '${item.modalidadeNome ?? item.nomeModalidade ?? item.modalidadeId ?? 'modalidade'}'?`)) {
+      return;
+    }
+
     try {
-      await http.delete(`/cadastros/empresas/${cadastroId}/parametrizacao/${item.id}`);
-      await reloadParametrizacao(cadastroId);
-      if (String(parametrizacaoId) === String(item.id)) {
+      const nextList = parametrizacoes.filter((current) => {
+        const currentId = String(current.id ?? '');
+        const currentModalidadeId = String(current.modalidadeId ?? '');
+        return !(currentId && currentId === String(item.id ?? '')) && currentModalidadeId !== String(item.modalidadeId ?? '');
+      });
+
+      await http.put('/api/fidc/parametrizacao', { id: cadastroId, fidcParametrizacoes: nextList });
+      setParametrizacoes(nextList);
+      if (String(parametrizacaoId) === String(item.id ?? '')) {
         setParametrizacaoId(null);
         setParametrizacaoForm(buildDefaultParamForm());
       }
       toast.success('Parametrização removida.');
+      await loadBundle(cadastroId, personId);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const onSave = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!ensureValidForm()) return;
+
+    setSaving(true);
+    try {
+      const resolvedPessoaId = await upsertPessoa();
+      setPersonId(resolvedPessoaId);
+
+      if (cadastroId) {
+        await loadBundle(cadastroId, resolvedPessoaId);
+        toast.success('Empresa atualizada.');
+        return;
+      }
+
+      const response = await http.post('/api/fidc/register', buildFidcCreatePayload(resolvedPessoaId, form));
+      const created = response.data as Record<string, unknown>;
+      const createdId = toText(created.id ?? created.Id ?? '');
+      if (!createdId) {
+        throw new Error('Não foi possível criar a empresa.');
+      }
+
+      toast.success('Empresa criada.');
+      navigate(`/cadastro/empresas/${createdId}`, { replace: true });
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const currentTitle = useMemo(() => (isEdit ? `Empresa: ${form.nome || 'Editar'}` : 'Nova Empresa'), [isEdit, form.nome]);
+
+  const changeTab = (key: TabKey) => {
+    if (!canAccessSubTabs && key !== 'cadastro') {
+      toast('Salve a empresa para liberar as abas complementares.');
+      return;
+    }
+    setActiveTab(key);
+  };
+
+  const addAnexo = async () => {
+    if (!cadastroId || !personId || !anexoFile) {
+      toast.error('Selecione um arquivo.');
+      return;
+    }
+
+    try {
+      await uploadLegacyAttachment(personId, LegacyAssociationType.FIDC, anexoFile);
+      setAnexoFile(null);
+      await loadBundle(cadastroId, personId);
+      toast.success('Anexo incluído.');
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const removeAnexo = async (anexoId: string) => {
+    if (!cadastroId || !personId || !window.confirm('Remover anexo?')) return;
+    try {
+      await removeLegacyAttachment(anexoId);
+      await loadBundle(cadastroId, personId);
+      toast.success('Anexo removido.');
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const addObservacao = async () => {
+    if (!cadastroId || !personId || !textoObservacao.trim()) return;
+    try {
+      await createLegacyObservation({
+        associationId: personId,
+        associacao: LegacyAssociationType.FIDC,
+        titulo: 'Observação',
+        observacao: textoObservacao.trim(),
+      });
+      setTextoObservacao('');
+      await loadBundle(cadastroId, personId);
+      toast.success('Observação adicionada.');
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const removeObservacao = async (observacaoId: string) => {
+    if (!cadastroId || !personId || !window.confirm('Remover observação?')) return;
+    try {
+      await removeLegacyObservation(observacaoId);
+      await loadBundle(cadastroId, personId);
+      toast.success('Observação removida.');
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -607,10 +768,10 @@ export const EmpresaFormPage = () => {
           <thead><tr><th>Modalidade</th><th>Limite</th><th>Taxa Min/Max</th><th className="col-actions">Ações</th></tr></thead>
           <tbody>
             {parametrizacoes.map((item) => (
-              <tr key={item.id}>
-                <td>{item.modalidadeNome}</td>
-                <td>{item.limite ?? '-'}</td>
-                <td>{item.taxaMinima ?? '-'} / {item.taxaMaxima ?? '-'}</td>
+              <tr key={String(item.id ?? item.modalidadeId ?? item.modalidadeNome ?? item.nomeModalidade ?? Math.random())}>
+                <td>{String(item.modalidadeNome ?? item.nomeModalidade ?? item.modalidadeId ?? '-')}</td>
+                <td>{toText(item.limite ?? '-')}</td>
+                <td>{toText(item.taxaMinima ?? '-')} / {toText(item.taxaMaxima ?? '-')}</td>
                 <td className="col-actions">
                   <div className="table-actions">
                     <button type="button" className="ghost" onClick={() => applyParametrizacao(item)}>Editar</button>
@@ -625,57 +786,6 @@ export const EmpresaFormPage = () => {
       </section>
     </section>
   );
-
-  const addAnexo = async () => {
-    if (!cadastroId || !anexoFile) {
-      toast.error('Selecione um arquivo.');
-      return;
-    }
-    try {
-      const data = new FormData();
-      data.append('file', anexoFile);
-      await http.post(`/cadastros/empresas/${cadastroId}/anexos`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setAnexoFile(null);
-      await loadSubTabs(cadastroId);
-      toast.success('Anexo incluído.');
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const removeAnexo = async (anexoId: string) => {
-    if (!cadastroId || !window.confirm('Remover anexo?')) return;
-    try {
-      await http.delete(`/cadastros/empresas/${cadastroId}/anexos/${anexoId}`);
-      await loadSubTabs(cadastroId);
-      toast.success('Anexo removido.');
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const addObservacao = async () => {
-    if (!cadastroId || !textoObservacao.trim()) return;
-    try {
-      await http.post(`/cadastros/empresas/${cadastroId}/observacoes`, { texto: textoObservacao.trim() });
-      setTextoObservacao('');
-      await loadSubTabs(cadastroId);
-      toast.success('Observação adicionada.');
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const removeObservacao = async (observacaoId: string) => {
-    if (!cadastroId || !window.confirm('Remover observação?')) return;
-    try {
-      await http.delete(`/cadastros/empresas/${cadastroId}/observacoes/${observacaoId}`);
-      await loadSubTabs(cadastroId);
-      toast.success('Observação removida.');
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
 
   const renderAnexosTab = () => (
     <section className="entity-card entity-form-stack">
