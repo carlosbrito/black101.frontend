@@ -20,9 +20,35 @@ const columns: Column<MovimentacaoListRow>[] = [
 export const MovimentacoesTable = ({
   rows,
   loading,
+  selectedIds,
+  onToggleRow,
+  onToggleAll,
+  onEdit,
+  onDelete,
+  onHistory,
 }: {
   rows: MovimentacaoListRow[];
   loading: boolean;
+  selectedIds: string[];
+  onToggleRow: (row: MovimentacaoListRow) => void;
+  onToggleAll: (checked: boolean) => void;
+  onEdit: (row: MovimentacaoListRow) => void;
+  onDelete: (row: MovimentacaoListRow) => void;
+  onHistory: (row: MovimentacaoListRow) => void;
 }) => {
-  return <DataTable columns={columns} rows={rows} loading={loading} mobileMode="scroll" />;
+  return (
+    <DataTable
+      columns={columns}
+      rows={rows}
+      loading={loading}
+      selectable
+      selectedIds={selectedIds}
+      onToggleRow={onToggleRow}
+      onToggleAll={onToggleAll}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      onDetails={onHistory}
+      mobileMode="scroll"
+    />
+  );
 };

@@ -39,6 +39,7 @@ export type MovimentacoesQueryState = MovimentacoesFilters;
 
 export type MovimentacaoApiItem = {
   id: string;
+  numeroDocumento?: string | null;
   tipoMovimento?: number;
   pagamentoEfetuado?: boolean;
   valorDespesa?: number;
@@ -47,21 +48,27 @@ export type MovimentacaoApiItem = {
   totalizador?: number;
   descricao?: string | null;
   fornecededor?: string | null;
-  cedente?: { pessoa?: { nome?: string | null } | null } | null;
-  planoDeConta?: { descricao?: string | null } | null;
   conta?: {
+    id?: string | null;
     descricao?: string | null;
     banco?: { codigo?: number | null } | null;
     agencia?: string | null;
     numeroConta?: string | null;
   } | null;
   contaDestino?: {
+    id?: string | null;
     descricao?: string | null;
     banco?: { codigo?: number | null } | null;
     agencia?: string | null;
     numeroConta?: string | null;
   } | null;
+  planoDeConta?: { id?: string | null; descricao?: string | null } | null;
+  cedente?: { id?: string | null; pessoa?: { nome?: string | null } | null } | null;
   dataMovimento?: string;
+  dataPagamento?: string | null;
+  dataVencimento?: string | null;
+  numeroReferencia?: string | null;
+  geradoAutomatico?: boolean;
   dateCreated?: string;
 };
 
@@ -81,6 +88,7 @@ export type MovimentacaoAccountBalanceCard = {
 
 export type MovimentacaoListRow = {
   id: string;
+  tipoCode: number;
   tipoLabel: string;
   tipoColor: string;
   baixaLabel: string;
@@ -96,14 +104,56 @@ export type MovimentacaoListRow = {
   extraValue: number | null;
   dataMovimento: string;
   dateCreated: string;
+  source: MovimentacaoApiItem;
 };
 
 export type MovimentacoesPermissions = {
+  canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
   canDeleteBatch: boolean;
   canSettleBatch: boolean;
   canReopenBatch: boolean;
   canGenerateAccountingReport: boolean;
+  canExport: boolean;
+  canImport: boolean;
+  canViewHistory: boolean;
   canEditAutomaticDebit: boolean;
+};
+
+export type MovimentacaoOption = {
+  value: string;
+  label: string;
+};
+
+export type MovimentacaoHistoryItem = {
+  id: string;
+  acao: string;
+  time: string;
+  user: string;
+};
+
+export type MovimentacaoFormState = {
+  id?: string;
+  tipo: 'Debito' | 'Credito' | 'Transferencia';
+  contaId: string;
+  contaDestinoId: string;
+  planoDeContaId: string;
+  cedenteId: string;
+  descricao: string;
+  fornecededor: string;
+  valor: string;
+  valorPago: string;
+  numeroReferencia: string;
+  dataMovimento: string;
+  dataPagamento: string;
+  dataVencimento: string;
+  pagamentoEfetuado: boolean;
+};
+
+export type MovimentacoesBatchSelectionItem = {
+  id: string;
+  tipoCode: number;
+  tipoLabel: string;
+  baixaLabel: string;
 };

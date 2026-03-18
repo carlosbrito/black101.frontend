@@ -5,9 +5,28 @@ import { MovimentacoesFeaturePage } from './MovimentacoesFeaturePage';
 const listMovimentacoesMock = vi.fn();
 const listAccountBalancesMock = vi.fn();
 
+vi.mock('../../../../app/auth/AuthContext', () => ({
+  useAuth: () => ({
+    claims: ['E_MFI', 'R_MFI', 'R_MFI_LOTE', 'E_MFI_BLT', 'W_RCT'],
+  }),
+}));
+
 vi.mock('../services/movimentacoesApi', () => ({
   listMovimentacoes: (...args: unknown[]) => listMovimentacoesMock(...args),
   listMovimentacoesAccountBalances: (...args: unknown[]) => listAccountBalancesMock(...args),
+  listContaOptions: vi.fn().mockResolvedValue([]),
+  listPlanoContaOptions: vi.fn().mockResolvedValue([]),
+  listCedenteOptions: vi.fn().mockResolvedValue([]),
+  getMovimentacaoById: vi.fn(),
+  createMovimentacao: vi.fn(),
+  updateMovimentacao: vi.fn(),
+  deleteMovimentacao: vi.fn(),
+  deleteMovimentacoesBatch: vi.fn(),
+  settleMovimentacoesBatch: vi.fn(),
+  reopenMovimentacoesBatch: vi.fn(),
+  getMovimentacaoHistory: vi.fn().mockResolvedValue([]),
+  exportMovimentacoesExcel: vi.fn(),
+  generateMovimentacoesAccountingReport: vi.fn(),
 }));
 
 describe('MovimentacoesFeaturePage', () => {

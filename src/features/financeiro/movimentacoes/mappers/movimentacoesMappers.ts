@@ -72,6 +72,7 @@ export const mapMovimentacaoListItem = (item: MovimentacaoApiItem): Movimentacao
 
   return {
     id: item.id,
+    tipoCode: item.tipoMovimento ?? -1,
     tipoLabel,
     tipoColor: getTipoColor(item.tipoMovimento),
     baixaLabel,
@@ -87,6 +88,7 @@ export const mapMovimentacaoListItem = (item: MovimentacaoApiItem): Movimentacao
     extraValue: (item.totalizador ?? 0) !== 0 ? item.totalizador ?? 0 : null,
     dataMovimento: item.dataMovimento ?? '',
     dateCreated: item.dateCreated ?? '',
+    source: item,
   };
 };
 
