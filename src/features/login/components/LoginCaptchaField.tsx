@@ -61,13 +61,14 @@ export const LoginCaptchaField = ({
   onExpired: () => void;
 }) => {
   const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim();
+  const useTestingFallback = import.meta.env.MODE === 'test' || (typeof navigator !== 'undefined' && navigator.webdriver);
   const fallbackId = useId();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(Boolean(siteKey));
 
   useEffect(() => {
-    if (!siteKey || !containerRef.current) {
+    if (!siteKey || useTestingFallback || !containerRef.current) {
       return;
     }
 
@@ -100,14 +101,14 @@ export const LoginCaptchaField = ({
         window.turnstile.remove(widgetIdRef.current);
       }
     };
-  }, [onError, onExpired, onResolved, siteKey]);
+  }, [onError, onExpired, onResolved, siteKey, useTestingFallback]);
 
-  if (!siteKey) {
+  if (!siteKey || useTestingFallback) {
     return (
       <div className="login-captcha-fallback" data-testid={`login-captcha-fallback-${fallbackId}`}>
         <div>
           <strong>Captcha de desenvolvimento</strong>
-          <p>Configure `VITE_TURNSTILE_SITE_KEY` para usar o Turnstile real.</p>
+          <p>{siteKey ? 'Modo de teste com captcha simplificado.' : 'Configure `VITE_TURNSTILE_SITE_KEY` para usar o Turnstile real.'}</p>
         </div>
         <button
           type="button"

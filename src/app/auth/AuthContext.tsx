@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { useLocation } from 'react-router-dom';
 import {
   authPath,
   ensureCsrfToken,
@@ -189,6 +190,7 @@ const parseLegacyTwoFactorToken = (payload: unknown) => {
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
@@ -421,6 +423,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const bootstrap = async () => {
+      if (location.pathname === '/login' && !getLegacyAccessToken()) {
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       await ensureCsrfToken();
       await refreshMe();
@@ -428,7 +435,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     void bootstrap();
-  }, [refreshMe]);
+  }, [location.pathname, refreshMe]);
 
   const value = useMemo<AuthContextValue>(() => ({
     isAuthenticated: !!user,
