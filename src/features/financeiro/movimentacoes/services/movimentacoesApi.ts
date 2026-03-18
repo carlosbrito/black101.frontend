@@ -3,6 +3,7 @@ import type {
   MovimentacaoAccountBalanceCard,
   MovimentacaoApiItem,
   MovimentacaoHistoryItem,
+  MovimentacaoImportPreviewItem,
   MovimentacaoOption,
   MovimentacoesFilters,
   MovimentacoesListResponse,
@@ -159,4 +160,38 @@ export const exportMovimentacoesExcel = async (filters: MovimentacoesFilters) =>
 
 export const generateMovimentacoesAccountingReport = async (payload: { start: string; end: string }) => {
   await http.post('/movimentofinanceiro/GerarRelatorioContabilidade', payload);
+};
+
+export const uploadMovimentacoesImport = async (payload: { contaId: string; file: File }) => {
+  const formData = new FormData();
+  formData.append('Arquivo', payload.file);
+  formData.append('ContaId', payload.contaId);
+  await http.post('/MovimentoFinanceiro/import/extrato', formData);
+};
+
+export const listMovimentacoesImportPreview = async (): Promise<MovimentacaoImportPreviewItem[]> => {
+  const response = await http.get<Array<Record<string, unknown>>>('/MovimentoFinanceiro/get/list/extrato');
+  return (response.data ?? []).map((item, index) => ({
+    id: String(item.id ?? `preview-${index}`),
+    data: String(item.data ?? ''),
+    historico: String(item.historico ?? ''),
+    docto: String(item.docto ?? ''),
+    credito: Number(item.credito ?? 0),
+    debito: Number(item.debito ?? 0),
+    planoContaId: String(item.planoContaId ?? ''),
+    transferenciaContaId: String(item.transferenciaContaId ?? 'Não Selecionado'),
+    baixa: Boolean(item.baixa ?? true),
+  }));
+};
+
+export const confirmMovimentacoesImport = async (payload: {
+  contaId: string;
+  movimentoFinanceiroExtratoPlanoContas: Array<{
+    id: string;
+    planoContaId: string;
+    transferenciaContaId: string | null;
+    baixa: boolean;
+  }>;
+}) => {
+  await http.post('/MovimentoFinanceiro/register/extrato', payload);
 };

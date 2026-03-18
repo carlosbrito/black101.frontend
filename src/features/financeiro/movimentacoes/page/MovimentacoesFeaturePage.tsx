@@ -9,6 +9,7 @@ import { MovimentacoesToolbar } from '../components/MovimentacoesToolbar';
 import { mapMovimentacaoListItem } from '../mappers/movimentacoesMappers';
 import {
   createMovimentacao,
+  confirmMovimentacoesImport,
   deleteMovimentacao,
   deleteMovimentacoesBatch,
   exportMovimentacoesExcel,
@@ -19,14 +20,17 @@ import {
   listContaOptions,
   listMovimentacoes,
   listMovimentacoesAccountBalances,
+  listMovimentacoesImportPreview,
   listPlanoContaOptions,
   reopenMovimentacoesBatch,
   settleMovimentacoesBatch,
+  uploadMovimentacoesImport,
   updateMovimentacao,
 } from '../services/movimentacoesApi';
 import type {
   MovimentacaoAccountBalanceCard,
   MovimentacaoFormState,
+  MovimentacaoImportPreviewItem,
   MovimentacaoListRow,
   MovimentacaoOption,
   MovimentacoesFilters,
@@ -40,6 +44,7 @@ import { MovimentacaoFormDialog } from '../dialogs/MovimentacaoFormDialog';
 import { MovimentacoesBatchDeleteDialog, MovimentacoesBatchReopenDialog, MovimentacoesBatchSettlementDialog } from '../dialogs/MovimentacoesBatchDialogs';
 import { MovimentacoesFilterDialog } from '../dialogs/MovimentacoesFilterDialog';
 import { MovimentacoesHistoryDialog } from '../dialogs/MovimentacoesHistoryDialog';
+import { MovimentacoesImportDialog, MovimentacoesImportReviewDialog } from '../dialogs/MovimentacoesImportDialogs';
 import { MovimentacoesSelectionDialog } from '../dialogs/MovimentacoesSelectionDialog';
 import '../../../cadastros/cadastro.css';
 import '../components/movimentacoes.css';
@@ -104,10 +109,14 @@ export const MovimentacoesFeaturePage = () => {
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
   const [batchSettlementDialogOpen, setBatchSettlementDialogOpen] = useState(false);
   const [batchReopenDialogOpen, setBatchReopenDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importReviewDialogOpen, setImportReviewDialogOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyItems, setHistoryItems] = useState<Array<{ id: string; acao: string; time: string; user: string }>>([]);
   const [historyTitle, setHistoryTitle] = useState('Histórico da movimentação');
   const [formState, setFormState] = useState<MovimentacaoFormState>(createEmptyForm('Debito'));
+  const [importContaId, setImportContaId] = useState('');
+  const [importPreviewItems, setImportPreviewItems] = useState<MovimentacaoImportPreviewItem[]>([]);
 
   const selectedRows = useMemo(() => rows.filter((row) => selectedIds.includes(row.id)), [rows, selectedIds]);
 
@@ -321,6 +330,49 @@ export const MovimentacoesFeaturePage = () => {
     }
   };
 
+  const handleImportUpload = async (payload: { contaId: string; file: File | null }) => {
+    if (!payload.contaId || !payload.file) {
+      toast.error('Selecione a conta e o arquivo do extrato.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await uploadMovimentacoesImport({ contaId: payload.contaId, file: payload.file });
+      const preview = await listMovimentacoesImportPreview();
+      setImportContaId(payload.contaId);
+      setImportPreviewItems(preview);
+      setImportDialogOpen(false);
+      setImportReviewDialogOpen(true);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleImportConfirm = async (items: MovimentacaoImportPreviewItem[]) => {
+    setSubmitting(true);
+    try {
+      await confirmMovimentacoesImport({
+        contaId: importContaId,
+        movimentoFinanceiroExtratoPlanoContas: items.map((item) => ({
+          id: item.id,
+          planoContaId: item.planoContaId,
+          transferenciaContaId: item.transferenciaContaId === 'Não Selecionado' ? null : item.transferenciaContaId,
+          baixa: item.baixa,
+        })),
+      });
+      toast.success('Importação concluída.');
+      setImportReviewDialogOpen(false);
+      await loadData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <PageFrame
       title="Movimentações Financeiras"
@@ -328,6 +380,7 @@ export const MovimentacoesFeaturePage = () => {
     >
       <MovimentacoesToolbar
         onCreate={() => setSelectionDialogOpen(true)}
+        onImport={() => setImportDialogOpen(true)}
         onOpenFilters={() => setFilterDialogOpen(true)}
         onRefresh={() => void loadData()}
         onExport={handleExport}
@@ -338,6 +391,7 @@ export const MovimentacoesFeaturePage = () => {
         selectedCount={selectedIds.length}
         canDeleteBatch={permissions.canDeleteBatch}
         canGenerateReport={permissions.canGenerateAccountingReport}
+        canImport={permissions.canImport}
         canReopenBatch={permissions.canReopenBatch}
         canSettleBatch={permissions.canSettleBatch}
         canExport={permissions.canExport}
@@ -395,6 +449,26 @@ export const MovimentacoesFeaturePage = () => {
         items={historyItems}
         loading={historyLoading}
         onClose={() => setHistoryDialogOpen(false)}
+      />
+
+      <MovimentacoesImportDialog
+        open={importDialogOpen}
+        contaOptions={contaOptions}
+        loading={submitting}
+        onClose={() => setImportDialogOpen(false)}
+        onSubmit={handleImportUpload}
+      />
+
+      <MovimentacoesImportReviewDialog
+        key={`import-${importContaId}-${importPreviewItems.length}`}
+        open={importReviewDialogOpen}
+        items={importPreviewItems}
+        contaId={importContaId}
+        contaOptions={contaOptions}
+        planoContaOptions={planoContaOptions}
+        loading={submitting}
+        onClose={() => setImportReviewDialogOpen(false)}
+        onSubmit={handleImportConfirm}
       />
 
       <MovimentacoesBatchDeleteDialog

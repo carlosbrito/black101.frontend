@@ -60,3 +60,34 @@
   resize: vertical;
   width: 100%;
 }
+
+.movimentacoes-import-grid {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.movimentacoes-import-row {
+  align-items: center;
+  background: #f7fbff;
+  border: 1px solid #d7e7f5;
+  border-radius: 12px;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 2fr 1fr 1.3fr 1.3fr auto;
+  padding: 0.8rem;
+}
+
+.movimentacoes-import-row span,
+.movimentacoes-import-row p,
+.movimentacoes-import-row small {
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .movimentacoes-import-row {
+    grid-template-columns: 1fr;
+  }
+}

@@ -157,3 +157,15 @@ export type MovimentacoesBatchSelectionItem = {
   tipoLabel: string;
   baixaLabel: string;
 };
+
+export type MovimentacaoImportPreviewItem = {
+  id: string;
+  data: string;
+  historico: string;
+  docto: string;
+  credito: number;
+  debito: number;
+  planoContaId: string;
+  transferenciaContaId: string;
+  baixa: boolean;
+};

@@ -27,6 +27,9 @@ vi.mock('../services/movimentacoesApi', () => ({
   getMovimentacaoHistory: vi.fn().mockResolvedValue([]),
   exportMovimentacoesExcel: vi.fn(),
   generateMovimentacoesAccountingReport: vi.fn(),
+  uploadMovimentacoesImport: vi.fn(),
+  listMovimentacoesImportPreview: vi.fn().mockResolvedValue([]),
+  confirmMovimentacoesImport: vi.fn(),
 }));
 
 describe('MovimentacoesFeaturePage', () => {

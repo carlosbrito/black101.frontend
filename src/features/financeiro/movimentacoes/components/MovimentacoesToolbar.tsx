@@ -4,11 +4,13 @@ export const MovimentacoesToolbar = ({
   onOpenFilters,
   onExport,
   onGenerateReport,
+  onImport,
   onDeleteBatch,
   onSettleBatch,
   onReopenBatch,
   selectedCount,
   canGenerateReport,
+  canImport,
   canDeleteBatch,
   canSettleBatch,
   canReopenBatch,
@@ -19,11 +21,13 @@ export const MovimentacoesToolbar = ({
   onOpenFilters: () => void;
   onExport: () => void;
   onGenerateReport: () => void;
+  onImport: () => void;
   onDeleteBatch: () => void;
   onSettleBatch: () => void;
   onReopenBatch: () => void;
   selectedCount: number;
   canGenerateReport: boolean;
+  canImport: boolean;
   canDeleteBatch: boolean;
   canSettleBatch: boolean;
   canReopenBatch: boolean;
@@ -32,6 +36,7 @@ export const MovimentacoesToolbar = ({
   return (
     <div className="toolbar">
       <button className="btn-main" onClick={onCreate}>Nova movimentação</button>
+      {canImport ? <button className="btn-muted" onClick={onImport}>Importar</button> : null}
       <button className="btn-muted" onClick={onOpenFilters}>Filtros</button>
       <button className="btn-muted" onClick={onRefresh}>Atualizar</button>
       {canExport ? <button className="btn-muted" onClick={onExport}>Exportar Excel</button> : null}
