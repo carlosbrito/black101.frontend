@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../../shared/api/http';
 import { PageFrame } from '../../../shared/ui/PageFrame';
@@ -20,14 +20,23 @@ import '../administradoras/entity-form.css';
 
 type TabKey = 'agente' | 'comissoes' | 'anexos' | 'observacoes' | 'historico';
 
+type PessoaContatoDto = {
+  email?: string | null;
+  telefone1?: string | null;
+  telefone2?: string | null;
+};
+
+type PessoaDto = {
+  id?: string;
+  nome?: string;
+  cnpjCpf?: string;
+  contatos?: PessoaContatoDto[];
+};
+
 type AgenteDto = {
   id: string;
-  pessoaId: string;
-  nome: string;
-  documento: string;
-  email: string;
-  telefone?: string | null;
-  ativo: boolean;
+  status?: number;
+  pessoa?: PessoaDto;
 };
 
 type AgenteFormState = {
@@ -61,8 +70,13 @@ const emptyStateMessageByTab: Record<Exclude<TabKey, 'agente' | 'historico'>, { 
   },
 };
 
+const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
+
+const statusFromActive = (ativo: boolean) => (ativo ? 0 : 1);
+
 export const AgenteFormPage = () => {
   const params = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const agenteId = params.id;
   const isEdit = !!agenteId;
@@ -117,25 +131,46 @@ export const AgenteFormPage = () => {
       }));
     }
   };
+
+  const applyPessoaOnForm = (pessoa: PessoaDto | undefined, ativo = true) => {
+    const contato = pessoa?.contatos?.[0];
+    setPessoaId(pessoa?.id ?? null);
+    setForm((current) => ({
+      ...current,
+      nome: pessoa?.nome ?? '',
+      documento: applyCpfCnpjMask(pessoa?.cnpjCpf ?? ''),
+      email: contato?.email ?? '',
+      telefone: applyPhoneMask(contato?.telefone1 ?? contato?.telefone2 ?? ''),
+      ativo,
+    }));
+  };
+
   useEffect(() => {
     const bootstrap = async () => {
-      if (!agenteId) {
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       try {
-        const response = await http.get(`/cadastros/agentes/${agenteId}`);
-        const agente = response.data as AgenteDto;
-        setPessoaId(agente.pessoaId);
-        setForm({
-          nome: agente.nome ?? '',
-          documento: applyCpfCnpjMask(agente.documento ?? ''),
-          email: agente.email ?? '',
-          telefone: applyPhoneMask(agente.telefone ?? ''),
-          ativo: agente.ativo,
+        if (agenteId) {
+          const response = await http.get<AgenteDto>(`/api/agente/get/unique/${agenteId}`);
+          const agente = response.data;
+          applyPessoaOnForm(agente.pessoa, Number(agente.status ?? 0) === 0);
+          return;
+        }
+
+        const documento = sanitizeDocument(searchParams.get('documento') ?? '');
+        if (!documento) {
+          setLoading(false);
+          return;
+        }
+
+        setForm((current) => ({ ...current, documento: applyCpfCnpjMask(documento) }));
+        const pessoaResponse = await http.get<PessoaDto>(`/api/pessoa/get/cnpjcpf/${documento}`, {
+          params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
         });
+        const pessoa = pessoaResponse.data;
+
+        if (pessoa?.id && pessoa.id !== EMPTY_GUID) {
+          applyPessoaOnForm(pessoa, true);
+        }
       } catch (error) {
         toast.error(getErrorMessage(error));
       } finally {
@@ -144,11 +179,12 @@ export const AgenteFormPage = () => {
     };
 
     void bootstrap();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [agenteId, searchParams]);
+
   useEffect(() => {
     if (!agenteId || activeTab !== 'historico') return;
     void loadHistorico(agenteId, historicoPaged.page);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab, agenteId, historicoPaged.page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureValidForm = () => {
     if (!form.nome.trim()) {
@@ -161,8 +197,8 @@ export const AgenteFormPage = () => {
       return false;
     }
 
-    if (!form.email.trim()) {
-      toast.error('Informe o e-mail do agente.');
+    if (form.email.trim() && !form.email.includes('@')) {
+      toast.error('Informe um e-mail válido.');
       return false;
     }
 
@@ -172,6 +208,46 @@ export const AgenteFormPage = () => {
     }
 
     return true;
+  };
+
+  const upsertPessoa = async (): Promise<string> => {
+    const documento = sanitizeDocument(form.documento);
+
+    const pessoaByDocumentResponse = await http.get<PessoaDto>(`/api/pessoa/get/cnpjcpf/${documento}`, {
+      params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
+    });
+
+    const found = pessoaByDocumentResponse.data;
+    const foundId = found?.id && found.id !== EMPTY_GUID ? found.id : null;
+
+    const payload = {
+      nome: form.nome.trim(),
+      cnpjCpf: documento,
+      contatos: [
+        {
+          nome: form.nome.trim(),
+          email: form.email.trim() || null,
+          telefone1: sanitizeDocument(form.telefone) || null,
+          telefone2: null,
+          observacoes: null,
+        },
+      ],
+    };
+
+    if (foundId) {
+      await http.put('/api/pessoa/update', { id: foundId, ...payload });
+      return foundId;
+    }
+
+    const createResponse = await http.post('/api/pessoa/register', payload);
+    const created = createResponse.data as Record<string, unknown>;
+    const createdId = String(created.id ?? created.Id ?? '');
+
+    if (!createdId) {
+      throw new Error('Não foi possível criar a pessoa do agente.');
+    }
+
+    return createdId;
   };
 
   const onSave = async (event: FormEvent) => {
@@ -184,22 +260,32 @@ export const AgenteFormPage = () => {
     setSaving(true);
 
     try {
-      const payload = {
-        nome: form.nome.trim(),
-        documento: sanitizeDocument(form.documento),
-        email: form.email.trim(),
-        telefone: form.telefone.trim() || null,
-        ativo: form.ativo,
-      };
+      const resolvedPessoaId = await upsertPessoa();
+      setPessoaId(resolvedPessoaId);
 
       if (agenteId) {
-        await http.put(`/cadastros/agentes/${agenteId}`, payload);
+        await http.put('/api/agente/update', {
+          id: agenteId,
+          status: statusFromActive(form.ativo),
+        });
         toast.success('Agente atualizado.');
       } else {
-        const response = await http.post('/cadastros/agentes', payload);
-        const created = response.data as { id: string };
+        const response = await http.post('/api/agente/register', { pessoaId: resolvedPessoaId });
+        const created = response.data as Record<string, unknown>;
+        const createdId = String(created.id ?? created.Id ?? response.data ?? '');
+        if (!createdId) {
+          throw new Error('Não foi possível criar o agente.');
+        }
+
+        if (!form.ativo) {
+          await http.put('/api/agente/update', {
+            id: createdId,
+            status: statusFromActive(false),
+          });
+        }
+
         toast.success('Agente criado.');
-        navigate(`/cadastro/agentes/${created.id}`, { replace: true });
+        navigate(`/cadastro/agentes/${createdId}`, { replace: true });
       }
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -260,7 +346,6 @@ export const AgenteFormPage = () => {
               type="email"
               value={form.email}
               onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-              required
             />
           </label>
           <label>
@@ -384,5 +469,3 @@ export const AgenteFormPage = () => {
     </PageFrame>
   );
 };
-
-

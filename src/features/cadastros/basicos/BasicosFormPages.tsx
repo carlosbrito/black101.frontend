@@ -1,9 +1,10 @@
 import { BasicoEntityFormPage } from './BasicoEntityFormPage';
+import { basicoEntityApis } from './entityApi';
 
 export const ConsultoraFormPage = () => (
   <BasicoEntityFormPage
     title="Consultora"
-    endpoint="/cadastros/consultoras"
+    api={basicoEntityApis.consultora}
     listRoute="/cadastro/consultoras"
     singularLabel="Consultora"
   />
@@ -12,7 +13,7 @@ export const ConsultoraFormPage = () => (
 export const CustodianteFormPage = () => (
   <BasicoEntityFormPage
     title="Custodiante"
-    endpoint="/cadastros/custodiantes"
+    api={basicoEntityApis.custodiante}
     listRoute="/cadastro/custodiantes"
     singularLabel="Custodiante"
   />
@@ -21,7 +22,7 @@ export const CustodianteFormPage = () => (
 export const GestoraFormPage = () => (
   <BasicoEntityFormPage
     title="Gestora"
-    endpoint="/cadastros/gestoras"
+    api={basicoEntityApis.gestora}
     listRoute="/cadastro/gestoras"
     singularLabel="Gestora"
   />
@@ -30,7 +31,7 @@ export const GestoraFormPage = () => (
 export const FornecedorFormPage = () => (
   <BasicoEntityFormPage
     title="Fornecedor"
-    endpoint="/cadastros/fornecedores"
+    api={basicoEntityApis.fornecedor}
     listRoute="/cadastro/fornecedores"
     singularLabel="Fornecedor"
   />
@@ -39,25 +40,16 @@ export const FornecedorFormPage = () => (
 export const EmitenteFormPage = () => (
   <BasicoEntityFormPage
     title="Emitente"
-    endpoint="/cadastros/emitentes"
+    api={basicoEntityApis.emitente}
     listRoute="/cadastro/emitentes"
     singularLabel="Emitente"
-  />
-);
-
-export const EmpresaFormPage = () => (
-  <BasicoEntityFormPage
-    title="Empresa"
-    endpoint="/cadastros/empresas"
-    listRoute="/cadastro/empresas"
-    singularLabel="Empresa"
   />
 );
 
 export const PrestadorFormPage = () => (
   <BasicoEntityFormPage
     title="Prestador de Serviço"
-    endpoint="/cadastros/prestadores"
+    api={basicoEntityApis.prestador}
     listRoute="/cadastro/prestadores"
     singularLabel="Prestador de Serviço"
   />
@@ -66,7 +58,7 @@ export const PrestadorFormPage = () => (
 export const InvestidorFormPage = () => (
   <BasicoEntityFormPage
     title="Investidor"
-    endpoint="/cadastros/investidores"
+    api={basicoEntityApis.investidor}
     listRoute="/cadastro/investidores"
     singularLabel="Investidor"
   />

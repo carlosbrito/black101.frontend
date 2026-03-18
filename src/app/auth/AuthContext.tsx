@@ -1,5 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ensureCsrfToken, http } from '../../shared/api/http';
+import axios from 'axios';
+import { useLocation } from 'react-router-dom';
+import {
+  authPath,
+  ensureCsrfToken,
+  getErrorMessage,
+  getLegacyAccessToken,
+  http,
+  legacyAuthPath,
+  setLegacyAccessToken,
+} from '../../shared/api/http';
+import { entraIdAuth } from '../../shared/services/entraIdAuth';
 import {
   SegmentoEmpresa,
   type AuthMeResponse,
@@ -17,7 +28,14 @@ type AuthContextValue = {
   isSecuritizadora: boolean;
   contextEmpresas: EmpresaContextItem[];
   selectedEmpresaIds: string[];
-  login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
+  login: (email: string, password: string, rememberMe: boolean, captchaToken?: string | null) => Promise<LoginResult>;
+  loginWithMicrosoft: () => Promise<LoginResult>;
+  hasMicrosoftSso: boolean;
+  completeLegacyTwoFactor: (input: CompleteLegacyTwoFactorInput) => Promise<void>;
+  generateLegacyTwoFactorQrCode: (email: string, tipoAutenticacao2FA: TwoFactorAuthType) => Promise<string>;
+  resendLegacyTwoFactorCode: (email: string) => Promise<boolean>;
+  sendLegacyEmailTwoFactorCode: (email: string) => Promise<void>;
+  getLegacyTwoFactorConfiguration: () => Promise<TwoFactorAuthType[]>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
   updateContextSelection: (empresaIds: string[]) => Promise<void>;
@@ -25,7 +43,154 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+type LegacyError = {
+  key?: string;
+  value?: string;
+};
+
+type LegacyEnvelope<T> = {
+  model?: T;
+  code?: number;
+  success?: boolean;
+  errors?: LegacyError[];
+  detail?: string;
+  message?: string;
+};
+
+type LegacyLoginModel = {
+  token?: string;
+  qrCode?: string;
+  requiresTwoFactorCode?: boolean;
+  requiresTwoFactorSetup?: boolean;
+};
+
+export type TwoFactorAuthType = 1 | 2;
+export type LegacyEmailTwoFactorType = 3;
+
+export type LoginResult =
+  | { status: 'authenticated' }
+  | {
+      status: 'two_factor_required';
+      challenge: {
+        email: string;
+        qrCode: string;
+        requiresTwoFactorSetup: boolean;
+      };
+    };
+
+type CompleteLegacyTwoFactorInput = {
+  email: string;
+  code: string;
+  resetKey: boolean;
+  tipoAutenticacao2FA: TwoFactorAuthType | LegacyEmailTwoFactorType;
+};
+
+type LegacyTwoFactorConfigurationResponse = {
+  tiposAtivados?: number[];
+};
+
+type LegacyUserContext = {
+  id?: string;
+  userId?: string;
+  nome?: string;
+  name?: string;
+  email?: string;
+  roles?: string[];
+  claims?: string[];
+  fidcs?: Array<{
+    id: string;
+    nome?: string;
+    name?: string;
+    cnpjCpf?: string;
+  }>;
+};
+
+const unwrapModel = <T,>(payload: LegacyEnvelope<T> | T): T => {
+  if (payload && typeof payload === 'object' && 'model' in (payload as LegacyEnvelope<T>)) {
+    return (payload as LegacyEnvelope<T>).model as T;
+  }
+
+  return payload as T;
+};
+
+const decodeJwtPayload = (token: string): Record<string, unknown> | null => {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) {
+      return null;
+    }
+
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = `${base64}${'='.repeat((4 - (base64.length % 4)) % 4)}`;
+    const json = atob(padded);
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
+const extractClaimsFromJwt = (payload: Record<string, unknown> | null): string[] => {
+  if (!payload) {
+    return [];
+  }
+
+  const ignored = new Set(['aud', 'exp', 'iss', 'nbf', 'iat', 'nameid', 'unique_name', 'sub', 'email', 'name']);
+  return Object.entries(payload)
+    .filter(([key, value]) => !ignored.has(key) && value !== null && value !== false && value !== 'False')
+    .map(([key]) => key);
+};
+
+const parseSegmentoEmpresa = (payload: Record<string, unknown> | null): SegmentoEmpresa => {
+  const raw = payload?.SegmentoEmpresa;
+  const numeric = Number(raw);
+  if (Number.isNaN(numeric)) {
+    return SegmentoEmpresa.Fidc;
+  }
+
+  return (numeric as SegmentoEmpresa) ?? SegmentoEmpresa.Fidc;
+};
+
+const parseSelectedEmpresaIdsFromJwt = (payload: Record<string, unknown> | null): string[] => {
+  const raw = payload?.FidcContextoRazao;
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    return [];
+  }
+
+  return raw
+    .split(/[;,]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+};
+
+const mapLegacyEmpresas = (context: LegacyUserContext): EmpresaContextItem[] => {
+  return (context.fidcs ?? []).map((item) => ({
+    id: item.id,
+    nome: item.nome ?? item.name ?? item.id,
+    documento: item.cnpjCpf ?? null,
+  }));
+};
+
+const shouldFallbackToLegacyAuth = (error: unknown) => {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+
+  const status = error.response?.status;
+  return !status || status === 404 || status === 405 || status === 500;
+};
+
+const parseLegacyTwoFactorToken = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  const tokenValue = (payload as { token?: string | boolean }).token;
+  return typeof tokenValue === 'string' ? tokenValue : '';
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
@@ -45,43 +210,224 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const refreshMe = useCallback(async () => {
     try {
-      const response = await http.get<AuthMeResponse>('/auth/me');
+      const response = await http.get<AuthMeResponse>(authPath('me'));
       setUser(response.data.user);
       setRoles(response.data.roles);
       setClaims(response.data.claims);
       setSegmentoEmpresa(response.data.segmentoEmpresa ?? SegmentoEmpresa.Fidc);
       setContextEmpresas(response.data.contextoEmpresas?.empresasDisponiveis ?? []);
       setSelectedEmpresaIds(response.data.contextoEmpresas?.empresasSelecionadasIds ?? []);
+      return;
+    } catch (modernError) {
+      const canFallbackFrom401 =
+        axios.isAxiosError(modernError) && modernError.response?.status === 401 && !!getLegacyAccessToken();
+      if (!canFallbackFrom401 && !shouldFallbackToLegacyAuth(modernError)) {
+        resetAuth();
+        return;
+      }
+    }
+
+    try {
+      const legacyContextResponse = await http.get<LegacyEnvelope<LegacyUserContext>>('/api/user/get/context');
+      const legacyContext = unwrapModel(legacyContextResponse.data);
+      const tokenPayload = decodeJwtPayload(getLegacyAccessToken() ?? '');
+
+      const mappedUser: AuthUser = {
+        id: legacyContext.id ?? legacyContext.userId ?? 'legacy-user',
+        name: legacyContext.nome ?? legacyContext.name ?? legacyContext.email ?? 'Usuário',
+        email: legacyContext.email ?? '',
+      };
+
+      const mappedRoles = legacyContext.roles ?? [];
+      const mappedClaims = legacyContext.claims ?? extractClaimsFromJwt(tokenPayload);
+      const mappedEmpresas = mapLegacyEmpresas(legacyContext);
+      const selectedByToken = parseSelectedEmpresaIdsFromJwt(tokenPayload);
+      const normalizedSelected =
+        selectedByToken.length > 0
+          ? selectedByToken
+          : mappedEmpresas.length === 1
+            ? [mappedEmpresas[0].id]
+            : [];
+
+      setUser(mappedUser);
+      setRoles(mappedRoles);
+      setClaims(mappedClaims);
+      setSegmentoEmpresa(parseSegmentoEmpresa(tokenPayload));
+      setContextEmpresas(mappedEmpresas);
+      setSelectedEmpresaIds(normalizedSelected);
     } catch {
       resetAuth();
     }
   }, [resetAuth]);
 
-  const login = useCallback(async (email: string, password: string, rememberMe: boolean) => {
-    await ensureCsrfToken();
-    await http.post('/auth/login', { email, password, rememberMe });
+  const exchangeLegacyTokenAndRefresh = useCallback(async () => {
+    const exchangedTokenResponse = await http.post<LegacyEnvelope<string>>(legacyAuthPath('gettoken'), null);
+    const exchangedToken = unwrapModel(exchangedTokenResponse.data);
+    if (typeof exchangedToken === 'string' && exchangedToken.length > 0) {
+      setLegacyAccessToken(exchangedToken);
+    }
     await refreshMe();
   }, [refreshMe]);
+
+  const login = useCallback(async (email: string, password: string, rememberMe: boolean, captchaToken?: string | null) => {
+    try {
+      await ensureCsrfToken();
+      await http.post(authPath('login'), {
+        email,
+        password,
+        rememberMe,
+        cloudflareCaptchaToken: captchaToken ?? undefined,
+      });
+      await refreshMe();
+      return { status: 'authenticated' } satisfies LoginResult;
+    } catch (modernError) {
+      const isUnauthorized = axios.isAxiosError(modernError) && modernError.response?.status === 401;
+      if (!isUnauthorized && !shouldFallbackToLegacyAuth(modernError)) {
+        throw new Error(getErrorMessage(modernError));
+      }
+    }
+
+    try {
+      const loginResponse = await http.post<LegacyEnvelope<LegacyLoginModel>>(legacyAuthPath('login'), {
+        email,
+        password,
+        rememberMe,
+        cloudflareCaptchaToken: captchaToken ?? undefined,
+      });
+      const loginModel = unwrapModel(loginResponse.data);
+      if (loginModel.requiresTwoFactorCode || loginModel.requiresTwoFactorSetup || loginModel.qrCode) {
+        return {
+          status: 'two_factor_required',
+          challenge: {
+            email,
+            qrCode: loginModel.qrCode ?? '',
+            requiresTwoFactorSetup: !!loginModel.requiresTwoFactorSetup,
+          },
+        } satisfies LoginResult;
+      }
+
+      if (loginModel.token) {
+        setLegacyAccessToken(loginModel.token);
+      }
+
+      await exchangeLegacyTokenAndRefresh();
+      return { status: 'authenticated' } satisfies LoginResult;
+    } catch (legacyError) {
+      throw new Error(getErrorMessage(legacyError));
+    }
+  }, [exchangeLegacyTokenAndRefresh, refreshMe]);
+
+  const loginWithMicrosoft = useCallback(async () => {
+    try {
+      const result = await entraIdAuth.loginPopup();
+      const idToken = result?.idToken ?? '';
+      if (!idToken) {
+        throw new Error('Não foi possível obter o token do Microsoft Entra ID.');
+      }
+
+      const response = await http.post<LegacyEnvelope<LegacyLoginModel>>(legacyAuthPath('login-entra'), { idToken });
+      const loginModel = unwrapModel(response.data);
+      if (loginModel.requiresTwoFactorCode || loginModel.requiresTwoFactorSetup || loginModel.qrCode) {
+        return {
+          status: 'two_factor_required',
+          challenge: {
+            email: result.account?.username ?? '',
+            qrCode: loginModel.qrCode ?? '',
+            requiresTwoFactorSetup: !!loginModel.requiresTwoFactorSetup,
+          },
+        } satisfies LoginResult;
+      }
+
+      if (loginModel.token) {
+        setLegacyAccessToken(loginModel.token);
+      }
+
+      await exchangeLegacyTokenAndRefresh();
+      return { status: 'authenticated' } satisfies LoginResult;
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }, [exchangeLegacyTokenAndRefresh]);
+
+  const completeLegacyTwoFactor = useCallback(async (input: CompleteLegacyTwoFactorInput) => {
+    const response = await http.post<LegacyEnvelope<unknown>>(legacyAuthPath('validateQrcode'), {
+      userEmail: input.email,
+      code: input.code,
+      resetKey: input.resetKey,
+      tipoAutenticacao2FA: input.tipoAutenticacao2FA,
+    });
+    const model = unwrapModel(response.data);
+    const token = parseLegacyTwoFactorToken(model);
+    if (!token) {
+      throw new Error('Código 2FA inválido.');
+    }
+
+    setLegacyAccessToken(token);
+    await exchangeLegacyTokenAndRefresh();
+  }, [exchangeLegacyTokenAndRefresh]);
+
+  const generateLegacyTwoFactorQrCode = useCallback(async (email: string, tipoAutenticacao2FA: TwoFactorAuthType) => {
+    const response = await http.get<LegacyEnvelope<{ qrCode?: string }>>(legacyAuthPath('generateQrCode'), {
+      params: { email, tipoAutenticacao2FA },
+    });
+    const model = unwrapModel(response.data);
+    return typeof model?.qrCode === 'string' ? model.qrCode : '';
+  }, []);
+
+  const resendLegacyTwoFactorCode = useCallback(async (email: string) => {
+    const response = await http.post<LegacyEnvelope<{ reenviado?: boolean }>>(legacyAuthPath('reset-totp'), { email });
+    const model = unwrapModel(response.data);
+    return !!model?.reenviado;
+  }, []);
+
+  const sendLegacyEmailTwoFactorCode = useCallback(async (email: string) => {
+    await http.post('/authentication/two-factor/email/envio', { email });
+  }, []);
+
+  const getLegacyTwoFactorConfiguration = useCallback(async (): Promise<TwoFactorAuthType[]> => {
+    const response = await http.get<LegacyEnvelope<LegacyTwoFactorConfigurationResponse>>('/authentication/two-factor/configuration');
+    const model = unwrapModel(response.data);
+    return (model?.tiposAtivados ?? []).filter((value): value is TwoFactorAuthType => value === 1 || value === 2);
+  }, []);
 
   const logout = useCallback(async () => {
     try {
       await ensureCsrfToken();
-      await http.post('/auth/logout');
-    } catch {
-      // A sessão local sempre deve ser encerrada no frontend, mesmo se o backend já tiver invalidado o cookie.
+      await http.post(authPath('logout'));
+    } catch (modernError) {
+      if (shouldFallbackToLegacyAuth(modernError)) {
+        await http.post(legacyAuthPath('logout'), null);
+      } else {
+        throw new Error(getErrorMessage(modernError));
+      }
     } finally {
+      setLegacyAccessToken(null);
       resetAuth();
     }
   }, [resetAuth]);
 
   const updateContextSelection = useCallback(async (empresaIds: string[]) => {
-    await ensureCsrfToken();
-    await http.put('/contexto/empresas/selecao', { empresaIds });
+    try {
+      await ensureCsrfToken();
+      await http.put('/contexto/empresas/selecao', { empresaIds });
+    } catch (modernError) {
+      if (!shouldFallbackToLegacyAuth(modernError)) {
+        throw modernError;
+      }
+
+      await http.put('/api/fidc/contexto/set', empresaIds);
+    }
+
     await refreshMe();
   }, [refreshMe]);
 
   useEffect(() => {
     const bootstrap = async () => {
+      if (location.pathname === '/login' && !getLegacyAccessToken()) {
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       await ensureCsrfToken();
       await refreshMe();
@@ -89,7 +435,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     void bootstrap();
-  }, [refreshMe]);
+  }, [location.pathname, refreshMe]);
 
   const value = useMemo<AuthContextValue>(() => ({
     isAuthenticated: !!user,
@@ -97,19 +443,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     user,
     roles,
     claims,
+    hasMicrosoftSso: entraIdAuth.hasValidConfiguration() || import.meta.env.DEV,
     segmentoEmpresa,
     isSecuritizadora: segmentoEmpresa === SegmentoEmpresa.Securitizadora,
     contextEmpresas,
     selectedEmpresaIds,
     login,
+    loginWithMicrosoft,
+    completeLegacyTwoFactor,
+    generateLegacyTwoFactorQrCode,
+    resendLegacyTwoFactorCode,
+    sendLegacyEmailTwoFactorCode,
+    getLegacyTwoFactorConfiguration,
     logout,
     refreshMe,
     updateContextSelection,
   }), [
     claims,
     contextEmpresas,
+    getLegacyTwoFactorConfiguration,
     loading,
     login,
+    loginWithMicrosoft,
+    completeLegacyTwoFactor,
+    generateLegacyTwoFactorQrCode,
+    resendLegacyTwoFactorCode,
+    sendLegacyEmailTwoFactorCode,
     logout,
     refreshMe,
     roles,

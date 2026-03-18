@@ -19,6 +19,21 @@ type AgenteRow = {
   ativo: boolean;
 };
 
+type AgenteApiRow = {
+  id: string;
+  status?: number;
+  pessoa?: {
+    id?: string;
+    nome?: string;
+    cnpjCpf?: string;
+    contatos?: Array<{
+      email?: string | null;
+      telefone1?: string | null;
+      telefone2?: string | null;
+    }>;
+  };
+};
+
 const columns: Column<AgenteRow>[] = [
   { key: 'nome', label: 'Nome' },
   { key: 'documento', label: 'CPF/CNPJ', render: (row) => formatCpfCnpj(row.documento) },
@@ -52,16 +67,27 @@ export const AgentesPage = () => {
     setLoading(true);
 
     try {
-      const response = await http.get('/cadastros/agentes', {
+      const response = await http.get('/api/agente/get/list', {
         params: {
           page,
           pageSize,
-          search: search || undefined,
+          keyword: search || undefined,
         },
       });
 
-      const paged = readPagedResponse<AgenteRow>(response.data);
-      setRows(paged.items);
+      const paged = readPagedResponse<AgenteApiRow>(response.data);
+      setRows(paged.items.map((item) => {
+        const contato = item.pessoa?.contatos?.[0];
+        return {
+          id: item.id,
+          pessoaId: item.pessoa?.id ?? '',
+          nome: item.pessoa?.nome ?? '',
+          documento: item.pessoa?.cnpjCpf ?? '',
+          email: contato?.email ?? '',
+          telefone: contato?.telefone1 ?? contato?.telefone2 ?? '',
+          ativo: Number(item.status ?? 0) === 0,
+        };
+      }));
       setTotalItems(paged.totalItems);
       setTotalPages(paged.totalPages);
     } catch (error) {
@@ -82,7 +108,7 @@ export const AgentesPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/agentes/${row.id}`);
+      await http.delete(`/api/agente/remove/${row.id}`);
       toast.success('Agente removido.');
       await load();
     } catch (error) {
@@ -100,20 +126,9 @@ export const AgentesPage = () => {
 
     setCreating(true);
     try {
-      const response = await http.post('/cadastros/agentes/auto-cadastro', { documento: doc });
-      const data = response.data as Record<string, unknown>;
-      const id = String(data.id ?? data.Id ?? '');
-      if (!id) {
-        toast.error('Não foi possível criar o agente.');
-        return;
-      }
-
-      const message = String(data.mensagem ?? data.Mensagem ?? '');
-      if (message) toast.success(message);
       setDocumentModalOpen(false);
       setDocumento('');
-      await load();
-      navigate(`/cadastro/agentes/${id}`);
+      navigate(`/cadastro/agentes/novo?documento=${doc}`);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {

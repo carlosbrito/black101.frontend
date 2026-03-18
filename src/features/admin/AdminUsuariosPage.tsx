@@ -2,6 +2,7 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../shared/api/http';
 import { PageFrame } from '../../shared/ui/PageFrame';
+import { readPagedResponse } from '../cadastros/cadastroCommon';
 
 type UserItem = { id: string; nomeCompleto: string; email: string; ativo: boolean };
 type ApiUserItem = {
@@ -14,11 +15,6 @@ type ApiUserItem = {
   ativo?: boolean;
   Ativo?: boolean;
 };
-type UsersResponse = {
-  items?: ApiUserItem[];
-  Items?: ApiUserItem[];
-};
-
 export const AdminUsuariosPage = () => {
   const [rows, setRows] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -26,9 +22,9 @@ export const AdminUsuariosPage = () => {
   const list = async () => {
     setLoading(true);
     try {
-      const response = await http.get<UsersResponse>('/admin/usuarios', { params: { page: 1, pageSize: 30 } });
-      const data = response.data;
-      const source = data.items ?? data.Items ?? [];
+      const response = await http.get('/api/user/get/list', { params: { page: 1, pageSize: 30 } });
+      const paged = readPagedResponse<ApiUserItem>(response.data);
+      const source = paged.items;
       setRows(source.map((item) => ({
         id: String(item.id ?? item.Id),
         nomeCompleto: String(item.nomeCompleto ?? item.NomeCompleto ?? ''),
@@ -43,11 +39,15 @@ export const AdminUsuariosPage = () => {
   };
 
   const createDemo = async () => {
+    const pessoaId = window.prompt('Informe o PessoaId (GUID) para o novo usuário');
+    if (!pessoaId) return;
+    const email = window.prompt('Informe o e-mail do usuário');
+    if (!email) return;
+
     try {
-      await http.post('/admin/usuarios', {
-        nomeCompleto: 'Usuário Teste',
-        email: `teste${Date.now()}@black101.local`,
-        password: 'Master@5859',
+      await http.post('/api/user/register', {
+        pessoaId,
+        email,
       });
       toast.success('Usuário criado.');
       await list();

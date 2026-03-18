@@ -91,7 +91,7 @@ export const BancoFormPage = () => {
 
       setLoading(true);
       try {
-        const response = await http.get(`/cadastros/bancos/${bancoId}`);
+        const response = await http.get(`/api/banco/get/unique/${bancoId}`);
         const banco = response.data as BancoDto;
         setForm({
           nome: banco.nome ?? '',
@@ -137,16 +137,18 @@ export const BancoFormPage = () => {
 
     try {
       const payload = {
+        id: bancoId ?? undefined,
         nome: form.nome.trim(),
-        codigo: form.codigo.trim(),
-        ativo: form.ativo,
+        codigo: Number(form.codigo.trim()),
+        observacao: null,
+        aptoGerarRelatorioBancario: false,
       };
 
       if (bancoId) {
-        await http.put(`/cadastros/bancos/${bancoId}`, payload);
+        await http.put('/api/banco/update', payload);
         toast.success('Banco atualizado.');
       } else {
-        const response = await http.post('/cadastros/bancos', payload);
+        const response = await http.post('/api/banco/register', payload);
         const created = response.data as { id: string };
         toast.success('Banco criado.');
         navigate(`/cadastro/bancos/${created.id}`, { replace: true });

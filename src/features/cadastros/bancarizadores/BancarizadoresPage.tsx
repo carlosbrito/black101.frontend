@@ -6,24 +6,26 @@ import { getErrorMessage, http } from '../../../shared/api/http';
 import { DataTable } from '../../../shared/ui/DataTable';
 import type { Column } from '../../../shared/ui/DataTable';
 import { PageFrame } from '../../../shared/ui/PageFrame';
-import { applyCpfCnpjMask, formatCpfCnpj, formatPhone, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../cadastroCommon';
+import { applyCpfCnpjMask, formatCpfCnpj, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../cadastroCommon';
 import '../cadastro.css';
 
 type BancarizadorRow = {
   id: string;
-  pessoaId: string;
   nome: string;
   documento: string;
-  email: string;
-  telefone?: string | null;
   ativo: boolean;
+};
+
+type BancarizadorApiRow = {
+  id: string;
+  nome?: string;
+  cnpjCpf?: string;
+  status?: number;
 };
 
 const columns: Column<BancarizadorRow>[] = [
   { key: 'nome', label: 'Nome' },
   { key: 'documento', label: 'CPF/CNPJ', render: (row) => formatCpfCnpj(row.documento) },
-  { key: 'email', label: 'E-mail' },
-  { key: 'telefone', label: 'Telefone', render: (row) => formatPhone(row.telefone ?? '') },
   {
     key: 'ativo',
     label: 'Status',
@@ -52,16 +54,19 @@ export const BancarizadoresPage = () => {
     setLoading(true);
 
     try {
-      const response = await http.get('/cadastros/bancarizadores', {
-        params: {
-          page,
-          pageSize,
-          search: search || undefined,
-        },
+      const response = await http.post('/api/bancarizador/get/list', {
+        page,
+        pageSize,
+        keyword: search || undefined,
       });
 
-      const paged = readPagedResponse<BancarizadorRow>(response.data);
-      setRows(paged.items);
+      const paged = readPagedResponse<BancarizadorApiRow>(response.data);
+      setRows(paged.items.map((item) => ({
+        id: item.id,
+        nome: item.nome ?? '',
+        documento: item.cnpjCpf ?? '',
+        ativo: Number(item.status ?? 1) === 1,
+      })));
       setTotalItems(paged.totalItems);
       setTotalPages(paged.totalPages);
     } catch (error) {
@@ -82,7 +87,7 @@ export const BancarizadoresPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/bancarizadores/${row.id}`);
+      await http.delete('/api/bancarizador/remove', { data: { ids: [row.id] } });
       toast.success('Bancarizador removido.');
       await load();
     } catch (error) {
@@ -100,20 +105,9 @@ export const BancarizadoresPage = () => {
 
     setCreating(true);
     try {
-      const response = await http.post('/cadastros/bancarizadores/auto-cadastro', { documento: doc });
-      const data = response.data as Record<string, unknown>;
-      const id = String(data.id ?? data.Id ?? '');
-      if (!id) {
-        toast.error('Não foi possível criar o bancarizador.');
-        return;
-      }
-
-      const message = String(data.mensagem ?? data.Mensagem ?? '');
-      if (message) toast.success(message);
       setDocumentModalOpen(false);
       setDocumento('');
-      await load();
-      navigate(`/cadastro/bancarizadores/${id}`);
+      navigate(`/cadastro/bancarizadores/novo?documento=${doc}`);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {

@@ -19,6 +19,21 @@ type RepresentanteRow = {
   ativo: boolean;
 };
 
+type RepresentanteApiRow = {
+  id: string;
+  status?: number;
+  pessoa?: {
+    id?: string;
+    nome?: string;
+    cnpjCpf?: string;
+    contatos?: Array<{
+      email?: string | null;
+      telefone1?: string | null;
+      telefone2?: string | null;
+    }>;
+  };
+};
+
 const columns: Column<RepresentanteRow>[] = [
   { key: 'nome', label: 'Nome' },
   { key: 'cnpjCpf', label: 'CPF/CNPJ', render: (row) => formatCpfCnpj(row.cnpjCpf) },
@@ -52,16 +67,29 @@ export const RepresentantesPage = () => {
     setLoading(true);
 
     try {
-      const response = await http.get('/cadastros/representantes', {
+      const response = await http.get('/api/representante/get/list', {
         params: {
           page,
           pageSize,
-          search: search || undefined,
+          keyword: search || undefined,
         },
       });
 
-      const paged = readPagedResponse<RepresentanteRow>(response.data);
-      setRows(paged.items);
+      const paged = readPagedResponse<RepresentanteApiRow>(response.data);
+      setRows(
+        paged.items.map((item) => {
+          const contato = item.pessoa?.contatos?.[0];
+          return {
+            id: item.id,
+            pessoaId: item.pessoa?.id ?? '',
+            nome: item.pessoa?.nome ?? '',
+            cnpjCpf: item.pessoa?.cnpjCpf ?? '',
+            email: contato?.email ?? '',
+            telefone: contato?.telefone1 ?? contato?.telefone2 ?? '',
+            ativo: Number(item.status ?? 0) === 0,
+          };
+        }),
+      );
       setTotalItems(paged.totalItems);
       setTotalPages(paged.totalPages);
     } catch (error) {
@@ -82,7 +110,7 @@ export const RepresentantesPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/representantes/${row.id}`);
+      await http.delete(`/api/representante/remove/${row.id}`);
       toast.success('Representante removido.');
       await load();
     } catch (error) {
@@ -100,20 +128,9 @@ export const RepresentantesPage = () => {
 
     setCreating(true);
     try {
-      const response = await http.post('/cadastros/representantes/auto-cadastro', { documento: doc });
-      const data = response.data as Record<string, unknown>;
-      const id = String(data.representanteId ?? data.RepresentanteId ?? '');
-      if (!id) {
-        toast.error('Não foi possível criar o representante.');
-        return;
-      }
-
-      const message = String(data.mensagem ?? data.Mensagem ?? '');
-      if (message) toast.success(message);
       setDocumentModalOpen(false);
       setDocumento('');
-      await load();
-      navigate(`/cadastro/representantes/${id}`);
+      navigate(`/cadastro/representantes/novo?documento=${doc}`);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../../shared/api/http';
 import { PageFrame } from '../../../shared/ui/PageFrame';
@@ -29,12 +29,8 @@ type TabKey = 'representante' | 'documentos' | 'anexos' | 'observacoes' | 'histo
 
 type RepresentanteDto = {
   id: string;
-  pessoaId: string;
-  nome: string;
-  cnpjCpf: string;
-  email?: string | null;
-  telefone?: string | null;
-  ativo: boolean;
+  status?: number;
+  pessoa?: PessoaDto;
 };
 
 type DocumentoDto = {
@@ -56,6 +52,7 @@ const tabs: Array<{ key: TabKey; label: string }> = [
 
 export const RepresentanteFormPage = () => {
   const params = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const representanteId = params.id;
   const isEdit = !!representanteId;
@@ -87,6 +84,8 @@ export const RepresentanteFormPage = () => {
   });
 
   const canAccessSubTabs = isEdit;
+  const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
+  const statusFromActive = (ativo: boolean) => (ativo ? 0 : 1);
 
   const syncPessoaForm = (pessoa: PessoaDto) => {
     setPessoaId(pessoa.id);
@@ -106,45 +105,74 @@ export const RepresentanteFormPage = () => {
   };
 
   const loadHistorico = async (id: string, page: number) => {
-    const response = await http.get(`/cadastros/representantes/${id}/historico`, {
-      params: { page, pageSize: historicoPaged.pageSize },
-    });
-
-    setHistoricoPaged(readPagedResponse<HistoricoItemDto>(response.data));
+    try {
+      const response = await http.get('/admin/auditoria', {
+        params: {
+          page,
+          pageSize: historicoPaged.pageSize,
+          entity: 'Representante',
+        },
+      });
+      const paged = readPagedResponse<HistoricoItemDto>(response.data);
+      const filteredItems = paged.items.filter((item) => item.entidadeId === id);
+      setHistoricoPaged({
+        items: filteredItems,
+        page,
+        pageSize: historicoPaged.pageSize,
+        totalItems: filteredItems.length,
+        totalPages: 1,
+      });
+    } catch {
+      setHistoricoPaged({
+        items: [],
+        page,
+        pageSize: historicoPaged.pageSize,
+        totalItems: 0,
+        totalPages: 1,
+      });
+    }
   };
 
   const loadSubTabs = async (id: string) => {
-    const [documentosRes, anexosRes, observacoesRes, historicoRes] = await Promise.all([
-      http.get(`/cadastros/representantes/${id}/documentos`),
-      http.get(`/cadastros/representantes/${id}/anexos`),
-      http.get(`/cadastros/representantes/${id}/observacoes`),
-      http.get(`/cadastros/representantes/${id}/historico`, { params: { page: 1, pageSize: 20 } }),
+    const [documentosRes, anexosRes, observacoesRes] = await Promise.all([
+      http.get('/api/representante/get/documentos', { params: { id } }).catch(() => ({ data: [] as DocumentoDto[] })),
+      http.get(`/cadastros/representantes/${id}/anexos`).catch(() => ({ data: [] as CadastroArquivoDto[] })),
+      http.get(`/cadastros/representantes/${id}/observacoes`).catch(() => ({ data: [] as CadastroObservacaoDto[] })),
     ]);
 
     setDocumentosRows((documentosRes.data as DocumentoDto[]) ?? []);
     setAnexosRows((anexosRes.data as CadastroArquivoDto[]) ?? []);
     setObservacoesRows((observacoesRes.data as CadastroObservacaoDto[]) ?? []);
-    setHistoricoPaged(readPagedResponse<HistoricoItemDto>(historicoRes.data));
+    await loadHistorico(id, 1);
   };
 
   useEffect(() => {
     const bootstrap = async () => {
-      if (!representanteId) {
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       try {
-        const repResponse = await http.get(`/cadastros/representantes/${representanteId}`);
-        const representante = repResponse.data as RepresentanteDto;
+        if (representanteId) {
+          const repResponse = await http.get(`/api/representante/get/unique/${representanteId}`);
+          const representante = repResponse.data as RepresentanteDto;
 
-        setRepresentanteAtivo(representante.ativo);
+          setRepresentanteAtivo(Number(representante.status ?? 0) === 0);
+          if (representante.pessoa) {
+            syncPessoaForm(representante.pessoa);
+          }
 
-        const pessoaResponse = await http.get(`/cadastros/pessoas/${representante.pessoaId}`);
-        syncPessoaForm(pessoaResponse.data as PessoaDto);
-
-        await loadSubTabs(representanteId);
+          await loadSubTabs(representanteId);
+        } else {
+          const documento = sanitizeDocument(searchParams.get('documento') ?? '');
+          if (documento) {
+            setPessoaForm((current) => ({ ...current, cnpjCpf: applyCpfCnpjMask(documento) }));
+            const pessoaResponse = await http.get<PessoaDto>(`/api/pessoa/get/cnpjcpf/${documento}`, {
+              params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
+            });
+            const pessoa = pessoaResponse.data;
+            if (pessoa?.id && pessoa.id !== EMPTY_GUID) {
+              syncPessoaForm(pessoa);
+            }
+          }
+        }
       } catch (error) {
         toast.error(getErrorMessage(error));
       } finally {
@@ -153,7 +181,7 @@ export const RepresentanteFormPage = () => {
     };
 
     void bootstrap();
-  }, [representanteId]);
+  }, [representanteId, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ensureValidPessoaForm = (): boolean => {
     const document = sanitizeDocument(pessoaForm.cnpjCpf);
@@ -182,21 +210,18 @@ export const RepresentanteFormPage = () => {
     let resolvedPessoaId = pessoaId;
 
     if (!resolvedPessoaId) {
-      const pessoaByDocument = await http.get('/cadastros/pessoas', {
-        params: {
-          documento: document,
-        },
+      const pessoaByDocument = await http.get<PessoaDto>(`/api/pessoa/get/cnpjcpf/${document}`, {
+        params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
       });
-
-      const found = pessoaByDocument.data as PessoaDto | null;
-
-      if (found?.id) {
+      const found = pessoaByDocument.data;
+      if (found?.id && found.id !== EMPTY_GUID) {
         resolvedPessoaId = found.id;
       }
     }
 
     if (resolvedPessoaId) {
-      await http.put(`/cadastros/pessoas/${resolvedPessoaId}`, {
+      await http.put('/api/pessoa/update', {
+        id: resolvedPessoaId,
         ...payload,
         ativo: pessoaForm.ativo,
       });
@@ -204,7 +229,7 @@ export const RepresentanteFormPage = () => {
       return resolvedPessoaId;
     }
 
-    const createResponse = await http.post('/cadastros/pessoas', payload);
+    const createResponse = await http.post('/api/pessoa/register', payload);
     const created = createResponse.data as { id: string };
     return created.id;
   };
@@ -223,24 +248,15 @@ export const RepresentanteFormPage = () => {
       setPessoaId(resolvedPessoaId);
 
       if (representanteId) {
-        await http.put(`/cadastros/representantes/${representanteId}`, {
-          pessoaId: resolvedPessoaId,
-          ativo: representanteAtivo,
-        });
+        await http.put('/api/representante/update', { id: representanteId, status: statusFromActive(representanteAtivo) });
 
         toast.success('Representante atualizado.');
       } else {
-        const createResponse = await http.post('/cadastros/representantes', {
-          pessoaId: resolvedPessoaId,
-        });
-
+        const createResponse = await http.post('/api/representante/register', { pessoaId: resolvedPessoaId });
         const created = createResponse.data as { id: string };
 
         if (!representanteAtivo) {
-          await http.put(`/cadastros/representantes/${created.id}`, {
-            pessoaId: resolvedPessoaId,
-            ativo: representanteAtivo,
-          });
+          await http.put('/api/representante/update', { id: created.id, status: statusFromActive(false) });
         }
 
         toast.success('Representante criado.');
@@ -291,11 +307,12 @@ export const RepresentanteFormPage = () => {
     }
 
     const formData = new FormData();
-    formData.append('tipoDocumento', tipoDocumento.trim());
+    formData.append('id', representanteId);
+    formData.append('tipoDocumentoRepresentante', tipoDocumento.trim());
     formData.append('file', documentoFile);
 
     try {
-      await http.post(`/cadastros/representantes/${representanteId}/documentos`, formData);
+      await http.post('/api/representante/documento', formData);
       setTipoDocumento('');
       setDocumentoFile(null);
       toast.success('Documento enviado.');
@@ -315,7 +332,7 @@ export const RepresentanteFormPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/representantes/${representanteId}/documentos/${item.id}`);
+      await http.delete(`/api/representante/documento/${item.id}`);
       toast.success('Documento removido.');
       await loadSubTabs(representanteId);
     } catch (error) {

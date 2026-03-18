@@ -18,6 +18,10 @@ export const DataTable = <T extends { id: string }>({
   onDelete,
   onDetails,
   renderActions,
+  selectable = false,
+  selectedIds = [],
+  onToggleRow,
+  onToggleAll,
   mobileMode = 'auto',
 }: {
   columns: Column<T>[];
@@ -27,9 +31,15 @@ export const DataTable = <T extends { id: string }>({
   onDelete?: (row: T) => void;
   onDetails?: (row: T) => void;
   renderActions?: (row: T) => React.ReactNode;
+  selectable?: boolean;
+  selectedIds?: string[];
+  onToggleRow?: (row: T) => void;
+  onToggleAll?: (checked: boolean) => void;
   mobileMode?: 'auto' | 'scroll' | 'cards';
 }) => {
   const hasActions = Boolean(onEdit || onDelete || onDetails || renderActions);
+  const allSelected = rows.length > 0 && rows.every((row) => selectedIds.includes(row.id));
+  const someSelected = rows.some((row) => selectedIds.includes(row.id));
   const resolvedMobileMode =
     mobileMode === 'auto'
       ? columns.filter((column) => !column.mobileHidden).length <= 4
@@ -50,6 +60,20 @@ export const DataTable = <T extends { id: string }>({
       <table>
         <thead>
           <tr>
+            {selectable ? (
+              <th className="checkbox-col">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(node) => {
+                    if (node) {
+                      node.indeterminate = !allSelected && someSelected;
+                    }
+                  }}
+                  onChange={(event) => onToggleAll?.(event.target.checked)}
+                />
+              </th>
+            ) : null}
             {columns.map((column) => (
               <th key={String(column.key)}>{column.label}</th>
             ))}
@@ -61,6 +85,11 @@ export const DataTable = <T extends { id: string }>({
           {loading
             ? Array.from({ length: 8 }).map((_, idx) => (
               <tr key={idx}>
+                {selectable ? (
+                  <td className="checkbox-col">
+                    <div className="skeleton" />
+                  </td>
+                ) : null}
                 {columns.map((col) => (
                   <td key={`${idx}-${String(col.key)}`}>
                     <div className="skeleton" />
@@ -75,6 +104,15 @@ export const DataTable = <T extends { id: string }>({
             ))
             : rows.map((row) => (
               <tr key={row.id}>
+                {selectable ? (
+                  <td className="checkbox-col">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(row.id)}
+                      onChange={() => onToggleRow?.(row)}
+                    />
+                  </td>
+                ) : null}
                 {columns.map((column) => (
                   <td key={`${row.id}-${String(column.key)}`}>
                     {column.render ? column.render(row) : String(row[column.key as keyof T] ?? '')}

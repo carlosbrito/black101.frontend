@@ -4,6 +4,7 @@ import { getErrorMessage, http } from '../../shared/api/http';
 import { sanitizeDocument } from './cadastroCommon';
 import toast from 'react-hot-toast';
 import { BasicoEntityListPage } from './basicos/BasicoEntityListPage';
+import { basicoEntityApis } from './basicos/entityApi';
 
 const tiposComCodigo = new Set(['Produto', 'WhiteList', 'BlackList']);
 
@@ -83,7 +84,7 @@ export const ConsultorasPage = () => (
   <BasicoEntityListPage
     title="Cadastro de Consultoras"
     subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
-    endpoint="/cadastros/consultoras"
+    api={basicoEntityApis.consultora}
     routeBase="/cadastro/consultoras"
     createLabel="Nova consultora"
   />
@@ -93,7 +94,7 @@ export const CustodiantePage = () => (
   <BasicoEntityListPage
     title="Cadastro de Custodiantes"
     subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
-    endpoint="/cadastros/custodiantes"
+    api={basicoEntityApis.custodiante}
     routeBase="/cadastro/custodiantes"
     createLabel="Novo custodiante"
   />
@@ -103,7 +104,7 @@ export const GestorasPage = () => (
   <BasicoEntityListPage
     title="Cadastro de Gestoras"
     subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
-    endpoint="/cadastros/gestoras"
+    api={basicoEntityApis.gestora}
     routeBase="/cadastro/gestoras"
     createLabel="Nova gestora"
   />
@@ -113,7 +114,7 @@ export const FornecedoresPage = () => (
   <BasicoEntityListPage
     title="Cadastro de Fornecedores"
     subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
-    endpoint="/cadastros/fornecedores"
+    api={basicoEntityApis.fornecedor}
     routeBase="/cadastro/fornecedores"
     createLabel="Novo fornecedor"
   />
@@ -123,7 +124,7 @@ export const EmitentesPage = () => (
   <BasicoEntityListPage
     title="Cadastro de Emitentes"
     subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
-    endpoint="/cadastros/emitentes"
+    api={basicoEntityApis.emitente}
     routeBase="/cadastro/emitentes"
     createLabel="Novo emitente"
   />
@@ -143,7 +144,7 @@ export const PrestadoresPage = () => (
   <BasicoEntityListPage
     title="Cadastro de Prestadores de Serviço"
     subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
-    endpoint="/cadastros/prestadores"
+    api={basicoEntityApis.prestador}
     routeBase="/cadastro/prestadores"
     createLabel="Novo prestador"
   />
@@ -153,7 +154,7 @@ export const InvestidoresPage = () => (
   <BasicoEntityListPage
     title="Cadastro de Investidores"
     subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
-    endpoint="/cadastros/investidores"
+    api={basicoEntityApis.investidor}
     routeBase="/cadastro/investidores"
     createLabel="Novo investidor"
   />

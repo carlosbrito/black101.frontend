@@ -41,7 +41,17 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     loggedIn: false,
     adm: [] as RecordItem[],
     age: [] as RecordItem[],
+    tes: [] as RecordItem[],
+    con: [] as RecordItem[],
+    cus: [] as RecordItem[],
+    ges: [] as RecordItem[],
+    frn: [] as RecordItem[],
+    emi: [] as RecordItem[],
+    inv: [] as RecordItem[],
+    pre: [] as RecordItem[],
     ban: [] as RecordItem[],
+    bac: [] as RecordItem[],
+    des: [] as RecordItem[],
     ced: [{
       id: seededCedenteId,
       pessoaId: seededPersonId,
@@ -69,6 +79,29 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
       dataOperacao: '2026-02-18T10:00:00Z',
       status: 'Aberta',
     }],
+    movimentacoes: [{
+      id: createId(),
+      tipoMovimento: 0,
+      pagamentoEfetuado: false,
+      valorDespesa: 1200,
+      valorPago: 0,
+      descricao: 'Pagamento financeiro Seed',
+      fornecededor: 'Fornecedor Seed',
+      conta: {
+        id: createId(),
+        descricao: 'Conta Seed',
+        banco: { codigo: 341 },
+        agencia: '1234',
+        numeroConta: '10001-9',
+      },
+      planoDeConta: { id: createId(), descricao: 'Plano Seed' },
+      cedente: { id: seededCedenteId, pessoa: { nome: 'Cedente Seed' } },
+      dataMovimento: '2026-03-18T10:00:00Z',
+      dataPagamento: null,
+      dataVencimento: '2026-03-19T00:00:00Z',
+      numeroReferencia: 'MOV-SEED-001',
+      dateCreated: '2026-03-18T10:00:00Z',
+    }],
     importacoes: [{
       id: createId(),
       fidcId: '00000000-0000-0000-0000-000000000001',
@@ -89,6 +122,17 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
         { id: createId(), status: 'PROCESSANDO', message: 'Arquivo recebido.', createdAt: '2026-02-18T08:00:00Z' },
         { id: createId(), status: 'FINALIZADO_FALHA', message: 'Falha de validação de linhas.', createdAt: '2026-02-18T08:01:00Z' },
       ],
+    }],
+    users: [{
+      id: createId(),
+      nomeCompleto: 'Administrador Black101',
+      email: 'admin@black101.local',
+      ativo: true,
+    }],
+    roles: [{
+      id: createId(),
+      nome: 'ADMIN',
+      ativo: true,
     }],
   };
   const cedenteTabs = new Map<string, Record<string, RecordItem | RecordItem[]>>();
@@ -120,7 +164,33 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     { id: createId(), cedenteId: seededCedenteId, modalidadeNome: 'CCB' },
   ];
 
-  await page.route('**/auth/csrf', async (route) => {
+  const ensurePersonByDocument = (documento: string) => {
+    const normalized = String(documento ?? '').replace(/\D/g, '');
+    const existing = Array.from(people.values()).find((item) => String(item.cnpjCpf ?? '').replace(/\D/g, '') === normalized);
+    if (existing) return existing;
+
+    const personId = createId();
+    const created = {
+      id: personId,
+      nome: `Pessoa ${normalized.slice(-6) || 'Auto'}`,
+      cnpjCpf: normalized,
+      documentoNormalizado: normalized,
+      tipoPessoa: normalized.length > 11 ? 'Juridica' : 'Fisica',
+      email: null,
+      telefone: null,
+      cidade: 'Sao Paulo',
+      uf: 'SP',
+      observacoesGerais: null,
+      ativo: true,
+      enderecos: [],
+      contatos: [],
+      qsas: [],
+    };
+    people.set(personId, created);
+    return created;
+  };
+
+  const csrfHandler = async (route: import('@playwright/test').Route) => {
     await route.fulfill({
       status: 200,
       headers: {
@@ -129,9 +199,9 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
       },
       body: JSON.stringify({ token: 'mocked-token' }),
     });
-  });
+  };
 
-  await page.route('**/auth/login', async (route) => {
+  const loginHandler = async (route: import('@playwright/test').Route) => {
     const data = route.request().postDataJSON() as { password: string };
     if (data.password !== 'Master@5859') {
       await route.fulfill({
@@ -143,10 +213,14 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     }
 
     state.loggedIn = true;
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'ok' }) });
-  });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'ok', model: { token: 'legacy-pre-token' }, code: 200 }),
+    });
+  };
 
-  await page.route('**/auth/me', async (route) => {
+  const meHandler = async (route: import('@playwright/test').Route) => {
     if (!state.loggedIn) {
       await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ detail: 'não autenticado' }) });
       return;
@@ -158,14 +232,959 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
       body: JSON.stringify({
         user: { id: '1', name: 'Administrador Black101', email: 'admin@black101.local' },
         roles: ['ADMIN'],
-        claims: ['CAD_ADM_L'],
+        claims: ['CAD_ADM_L', 'E_MFI', 'R_MFI', 'R_MFI_LOTE', 'E_MFI_BLT', 'W_RCT', 'E_MFI_BAI'],
+      }),
+    });
+  };
+
+  const logoutHandler = async (route: import('@playwright/test').Route) => {
+    state.loggedIn = false;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'ok' }) });
+  };
+
+  await page.route('**/auth/csrf', csrfHandler);
+  await page.route('**/auth/login', loginHandler);
+  await page.route('**/auth/me', meHandler);
+  await page.route('**/auth/logout', logoutHandler);
+
+  await page.route('**/authentication/login', loginHandler);
+  await page.route('**/authentication/logout', logoutHandler);
+  await page.route('**/authentication/login-entra', async (route) => {
+    state.loggedIn = true;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { token: 'legacy-pre-token' }, code: 200 }),
+    });
+  });
+  await page.route('**/api/authentication/login', loginHandler);
+  await page.route('**/api/authentication/logout', logoutHandler);
+  await page.route('**/api/authentication/login-entra', async (route) => {
+    state.loggedIn = true;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { token: 'legacy-pre-token' }, code: 200 }),
+    });
+  });
+  await page.route('**/authentication/gettoken', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: 'legacy-session-token', code: 200 }),
+    });
+  });
+  await page.route('**/api/authentication/gettoken', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: 'legacy-session-token', code: 200 }),
+    });
+  });
+  const validateQrcodeHandler = async (route: import('@playwright/test').Route) => {
+    const body = route.request().postDataJSON() as { code?: string };
+    const isValid = String(body.code ?? '') === '123456';
+    if (isValid) {
+      state.loggedIn = true;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { token: isValid ? 'legacy-pre-token' : '' }, code: 200 }),
+    });
+  };
+  await page.route('**/authentication/validateQrcode', validateQrcodeHandler);
+  await page.route('**/api/authentication/validateQrcode', validateQrcodeHandler);
+  await page.route('**/authentication/two-factor/configuration', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { tiposAtivados: [] }, code: 200 }),
+    });
+  });
+  await page.route('**/authentication/two-factor/email/envio', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { sent: true }, code: 200 }),
+    });
+  });
+  const generateQrCodeHandler = async (route: import('@playwright/test').Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model: { qrCode: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgUY8ailAAAAASUVORK5CYII=' },
+        code: 200,
+      }),
+    });
+  };
+  await page.route('**/authentication/generateQrCode**', generateQrCodeHandler);
+  await page.route('**/api/authentication/generateQrCode**', generateQrCodeHandler);
+  const resetTotpHandler = async (route: import('@playwright/test').Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { reenviado: true, mensagem: 'Email enviado com sucesso' }, code: 200 }),
+    });
+  };
+  await page.route('**/authentication/reset-totp', resetTotpHandler);
+  await page.route('**/api/authentication/reset-totp', resetTotpHandler);
+  await page.route('**/user/get/context', async (route) => {
+    if (!state.loggedIn) {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'não autenticado' }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model: {
+          id: '1',
+          nome: 'Administrador Black101',
+          email: 'admin@black101.local',
+          fidcs: [
+            { id: '00000000-0000-0000-0000-000000000001', nome: 'FIDC Seed', cnpjCpf: '12345678000199' },
+          ],
+          roles: ['ADMIN'],
+          claims: ['CAD_ADM_L'],
+        },
+        code: 200,
+      }),
+    });
+  });
+  await page.route('**/api/user/get/context', async (route) => {
+    if (!state.loggedIn) {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'não autenticado' }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model: {
+          id: '1',
+          nome: 'Administrador Black101',
+          email: 'admin@black101.local',
+          fidcs: [
+            { id: '00000000-0000-0000-0000-000000000001', nome: 'FIDC Seed', cnpjCpf: '12345678000199' },
+          ],
+          roles: ['ADMIN'],
+          claims: ['CAD_ADM_L'],
+        },
+        code: 200,
       }),
     });
   });
 
-  await page.route('**/auth/logout', async (route) => {
-    state.loggedIn = false;
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'ok' }) });
+  await page.route('**/user/get/list**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(createPaged(state.users)),
+    });
+  });
+  await page.route('**/api/user/get/list**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(createPaged(state.users)),
+    });
+  });
+
+  const registerUserHandler = async (route: import('@playwright/test').Route) => {
+    const body = route.request().postDataJSON() as { pessoaId?: string; email?: string };
+    state.users.push({
+      id: createId(),
+      nomeCompleto: `Usuário ${String(body.pessoaId ?? '').slice(0, 6) || 'Novo'}`,
+      email: body.email ?? `user${Date.now()}@black101.local`,
+      ativo: true,
+    });
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: createId() }),
+    });
+  };
+  await page.route('**/user/register', registerUserHandler);
+  await page.route('**/api/user/register', registerUserHandler);
+
+  await page.route('**/grupo/get/list**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(createPaged(state.roles)),
+    });
+  });
+  await page.route('**/api/grupo/get/list**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(createPaged(state.roles)),
+    });
+  });
+
+  const registerGroupHandler = async (route: import('@playwright/test').Route) => {
+    const body = route.request().postDataJSON() as { nome?: string };
+    state.roles.push({
+      id: createId(),
+      nome: body.nome ?? 'NOVO_PERFIL',
+      ativo: true,
+    });
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: createId() }),
+    });
+  };
+  await page.route('**/grupo/register', registerGroupHandler);
+  await page.route('**/api/grupo/register', registerGroupHandler);
+
+  await page.route('**/api/banco/**', async (route) => {
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    const path = url.pathname;
+
+    if (path === '/banco/get/list' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(createPaged(state.ban)),
+      });
+      return;
+    }
+
+    if (/^\/banco\/get\/unique\/[^/]+$/.test(path) && method === 'GET') {
+      const id = path.split('/').pop() ?? '';
+      const found = state.ban.find((item) => item.id === id);
+      await route.fulfill({
+        status: found ? 200 : 404,
+        contentType: 'application/json',
+        body: JSON.stringify(found ?? {}),
+      });
+      return;
+    }
+
+    if (path === '/banco/register' && method === 'POST') {
+      const body = route.request().postDataJSON() as RecordItem;
+      const id = createId();
+      state.ban.push({
+        id,
+        nome: body.nome ?? 'Banco',
+        codigo: body.codigo ?? '000',
+        ativo: true,
+      });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) });
+      return;
+    }
+
+    if (path === '/banco/update' && method === 'PUT') {
+      const body = route.request().postDataJSON() as RecordItem;
+      const id = String(body.id ?? '');
+      const idx = state.ban.findIndex((item) => item.id === id);
+      if (idx >= 0) {
+        state.ban[idx] = { ...state.ban[idx], ...body };
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    if (/^\/banco\/remove\/[^/]+$/.test(path) && method === 'DELETE') {
+      const id = path.split('/').pop() ?? '';
+      const idx = state.ban.findIndex((item) => item.id === id);
+      if (idx >= 0) {
+        state.ban.splice(idx, 1);
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.route('**/api/despesa/**', async (route) => {
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    const path = url.pathname;
+
+    if (path === '/despesa/get/list' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(createPaged(state.des)),
+      });
+      return;
+    }
+
+    if (/^\/despesa\/get\/unique\/[^/]+$/.test(path) && method === 'GET') {
+      const id = path.split('/').pop() ?? '';
+      const found = state.des.find((item) => item.id === id);
+      await route.fulfill({
+        status: found ? 200 : 404,
+        contentType: 'application/json',
+        body: JSON.stringify(found ?? {}),
+      });
+      return;
+    }
+
+    if (path === '/despesa/register' && method === 'POST') {
+      const body = route.request().postDataJSON() as RecordItem;
+      const id = createId();
+      state.des.push({
+        id,
+        nome: body.nome ?? 'Despesa',
+        segmento: Number(body.segmento ?? 2),
+        tipo: Number(body.tipo ?? 2),
+        valorBase: Number(body.valor ?? 0),
+        status: 1,
+      });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) });
+      return;
+    }
+
+    if (path === '/despesa/update' && method === 'PUT') {
+      const body = route.request().postDataJSON() as RecordItem;
+      const id = String(body.id ?? '');
+      const idx = state.des.findIndex((item) => item.id === id);
+      if (idx >= 0) {
+        state.des[idx] = {
+          ...state.des[idx],
+          ...body,
+          valorBase: Number(body.valor ?? state.des[idx].valorBase ?? 0),
+          tipo: Number(body.tipo ?? state.des[idx].tipo ?? 2),
+        };
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    if (/^\/despesa\/(activate|deactivate)\/[^/]+$/.test(path) && method === 'PUT') {
+      const id = path.split('/').pop() ?? '';
+      const idx = state.des.findIndex((item) => item.id === id);
+      if (idx >= 0) {
+        state.des[idx] = { ...state.des[idx], status: path.includes('/activate/') ? 1 : 0 };
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    if (/^\/despesa\/remove\/[^/]+$/.test(path) && method === 'DELETE') {
+      const id = path.split('/').pop() ?? '';
+      const idx = state.des.findIndex((item) => item.id === id);
+      if (idx >= 0) {
+        state.des.splice(idx, 1);
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.route('**/api/pessoa/**', async (route) => {
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    const path = url.pathname;
+
+    if (/^\/pessoa\/get\/cnpjcpf\/[^/]+$/.test(path) && method === 'GET') {
+      const documento = decodeURIComponent(path.split('/').pop() ?? '').replace(/\D/g, '');
+      const person = ensurePersonByDocument(documento);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(person) });
+      return;
+    }
+
+    if (path === '/pessoa/register' && method === 'POST') {
+      const body = route.request().postDataJSON() as RecordItem;
+      const cnpjCpf = String(body.cnpjCpf ?? '').replace(/\D/g, '');
+      const existing = Array.from(people.values()).find((item) => String(item.cnpjCpf ?? '').replace(/\D/g, '') === cnpjCpf);
+      if (existing) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: existing.id }) });
+        return;
+      }
+
+      const id = createId();
+      people.set(id, {
+        id,
+        ...body,
+        cnpjCpf,
+        contatos: body.contatos ?? [],
+      });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) });
+      return;
+    }
+
+    if (path === '/pessoa/update' && method === 'PUT') {
+      const body = route.request().postDataJSON() as RecordItem;
+      const id = String(body.id ?? '');
+      const current = people.get(id);
+      if (current) {
+        people.set(id, { ...current, ...body });
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.route('**/api/agente/**', async (route) => {
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    const path = url.pathname;
+
+    if (path === '/agente/get/list' && method === 'GET') {
+      const rows = state.age.map((item) => {
+        const person = people.get(String(item.pessoaId));
+        return {
+          id: item.id,
+          status: item.status ?? 0,
+          pessoa: person
+            ? {
+                id: person.id,
+                nome: person.nome,
+                cnpjCpf: person.cnpjCpf,
+                contatos: person.contatos ?? [],
+              }
+            : null,
+        };
+      });
+
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(createPaged(rows)) });
+      return;
+    }
+
+    if (/^\/agente\/get\/unique\/[^/]+$/.test(path) && method === 'GET') {
+      const id = path.split('/').pop() ?? '';
+      const found = state.age.find((item) => item.id === id);
+      if (!found) {
+        await route.fulfill({ status: 404, body: '{}' });
+        return;
+      }
+
+      const person = people.get(String(found.pessoaId));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: found.id,
+          status: found.status ?? 0,
+          pessoa: person
+            ? {
+                id: person.id,
+                nome: person.nome,
+                cnpjCpf: person.cnpjCpf,
+                contatos: person.contatos ?? [],
+              }
+            : null,
+        }),
+      });
+      return;
+    }
+
+    if (path === '/agente/register' && method === 'POST') {
+      const body = route.request().postDataJSON() as { pessoaId?: string };
+      const existing = state.age.find((item) => String(item.pessoaId) === String(body.pessoaId ?? ''));
+      const id = existing?.id ?? createId();
+      if (!existing) {
+        state.age.push({ id, pessoaId: body.pessoaId ?? '', status: 0 });
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) });
+      return;
+    }
+
+    if (path === '/agente/update' && method === 'PUT') {
+      const body = route.request().postDataJSON() as { id?: string; status?: number };
+      const idx = state.age.findIndex((item) => item.id === String(body.id ?? ''));
+      if (idx >= 0) {
+        state.age[idx] = { ...state.age[idx], status: Number(body.status ?? 0) };
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    if (/^\/agente\/remove\/[^/]+$/.test(path) && method === 'DELETE') {
+      const id = path.split('/').pop() ?? '';
+      const idx = state.age.findIndex((item) => item.id === id);
+      if (idx >= 0) {
+        state.age.splice(idx, 1);
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.route('**/api/testemunha/**', async (route) => {
+    const method = route.request().method();
+    const path = new URL(route.request().url()).pathname;
+
+    if (path === '/testemunha/get/list' && method === 'GET') {
+      const rows = state.tes.map((item) => {
+        const person = people.get(String(item.pessoaId));
+        return {
+          id: item.id,
+          status: item.status ?? 0,
+          pessoa: person
+            ? {
+                id: person.id,
+                nome: person.nome,
+                cnpjCpf: person.cnpjCpf,
+                contatos: person.contatos ?? [],
+              }
+            : null,
+        };
+      });
+
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(createPaged(rows)) });
+      return;
+    }
+
+    if (/^\/testemunha\/get\/unique\/[^/]+$/.test(path) && method === 'GET') {
+      const id = path.split('/').pop() ?? '';
+      const found = state.tes.find((item) => item.id === id);
+      if (!found) {
+        await route.fulfill({ status: 404, body: '{}' });
+        return;
+      }
+
+      const person = people.get(String(found.pessoaId));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: found.id,
+          status: found.status ?? 0,
+          pessoa: person
+            ? {
+                id: person.id,
+                nome: person.nome,
+                cnpjCpf: person.cnpjCpf,
+                contatos: person.contatos ?? [],
+              }
+            : null,
+        }),
+      });
+      return;
+    }
+
+    if (path === '/testemunha/register' && method === 'POST') {
+      const body = route.request().postDataJSON() as { pessoaId?: string };
+      const existing = state.tes.find((item) => String(item.pessoaId) === String(body.pessoaId ?? ''));
+      const id = existing?.id ?? createId();
+      if (!existing) {
+        state.tes.push({ id, pessoaId: body.pessoaId ?? '', status: 0 });
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) });
+      return;
+    }
+
+    if (path === '/testemunha/update' && method === 'PUT') {
+      const body = route.request().postDataJSON() as { id?: string; status?: number };
+      const idx = state.tes.findIndex((item) => item.id === String(body.id ?? ''));
+      if (idx >= 0) {
+        state.tes[idx] = { ...state.tes[idx], status: Number(body.status ?? 0) };
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    if (/^\/testemunha\/remove\/[^/]+$/.test(path) && method === 'DELETE') {
+      const id = path.split('/').pop() ?? '';
+      const idx = state.tes.findIndex((item) => item.id === id);
+      if (idx >= 0) {
+        state.tes.splice(idx, 1);
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.route('**/api/representante/**', async (route) => {
+    const method = route.request().method();
+    const path = new URL(route.request().url()).pathname;
+
+    if (path === '/representante/get/list' && method === 'GET') {
+      const rows = state.rep.map((item) => {
+        const person = people.get(String(item.pessoaId));
+        return {
+          id: item.id,
+          status: item.status ?? 0,
+          pessoa: person
+            ? {
+                id: person.id,
+                nome: person.nome,
+                cnpjCpf: person.cnpjCpf,
+                contatos: person.contatos ?? [],
+              }
+            : null,
+        };
+      });
+
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(createPaged(rows)) });
+      return;
+    }
+
+    if (/^\/representante\/get\/unique\/[^/]+$/.test(path) && method === 'GET') {
+      const id = path.split('/').pop() ?? '';
+      const found = state.rep.find((item) => item.id === id);
+      if (!found) {
+        await route.fulfill({ status: 404, body: '{}' });
+        return;
+      }
+
+      const person = people.get(String(found.pessoaId));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: found.id,
+          status: found.status ?? 0,
+          pessoa: person
+            ? {
+                id: person.id,
+                nome: person.nome,
+                cnpjCpf: person.cnpjCpf,
+                contatos: person.contatos ?? [],
+              }
+            : null,
+        }),
+      });
+      return;
+    }
+
+    if (path === '/representante/register' && method === 'POST') {
+      const body = route.request().postDataJSON() as { pessoaId?: string };
+      const existing = state.rep.find((item) => String(item.pessoaId) === String(body.pessoaId ?? ''));
+      const id = existing?.id ?? createId();
+      if (!existing) {
+        state.rep.push({ id, pessoaId: body.pessoaId ?? '', status: 0 });
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) });
+      return;
+    }
+
+    if (path === '/representante/update' && method === 'PUT') {
+      const body = route.request().postDataJSON() as { id?: string; status?: number };
+      const idx = state.rep.findIndex((item) => item.id === String(body.id ?? ''));
+      if (idx >= 0) {
+        state.rep[idx] = { ...state.rep[idx], status: Number(body.status ?? 0) };
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    if (/^\/representante\/remove\/[^/]+$/.test(path) && method === 'DELETE') {
+      const id = path.split('/').pop() ?? '';
+      const idx = state.rep.findIndex((item) => item.id === id);
+      if (idx >= 0) {
+        state.rep.splice(idx, 1);
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    if (path === '/representante/get/documentos' && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      return;
+    }
+
+    if (path === '/representante/documento' && method === 'POST') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: createId() }) });
+      return;
+    }
+
+    if (/^\/representante\/documento\/[^/]+$/.test(path) && method === 'DELETE') {
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.route('**/api/bancarizador/**', async (route) => {
+    const method = route.request().method();
+    const path = new URL(route.request().url()).pathname;
+
+    if (path === '/bancarizador/get/list' && method === 'POST') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(createPaged(state.bac)) });
+      return;
+    }
+
+    if (path === '/bancarizador/get/cnpjcpf/gestora' && method === 'GET') {
+      const documento = new URL(route.request().url()).searchParams.get('cnpjcpf') ?? '';
+      const normalized = documento.replace(/\D/g, '');
+      const existing = state.bac.find((item) => String(item.cnpjCpf ?? '').replace(/\D/g, '') === normalized);
+      if (existing) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            bancarizadorId: existing.id,
+            pessoaId: null,
+            nome: existing.nome,
+            cnpjCpf: existing.cnpjCpf,
+          }),
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          bancarizadorId: null,
+          pessoaId: null,
+          nome: `Pessoa ${normalized.slice(-6) || 'Auto'}`,
+          cnpjCpf: normalized,
+        }),
+      });
+      return;
+    }
+
+    if (/^\/bancarizador\/get\/unique\/[^/]+$/.test(path) && method === 'GET') {
+      const id = path.split('/').pop() ?? '';
+      const found = state.bac.find((item) => item.id === id);
+      if (!found) {
+        await route.fulfill({ status: 404, body: '{}' });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(found) });
+      return;
+    }
+
+    if (path === '/bancarizador/register' && method === 'POST') {
+      const body = route.request().postDataJSON() as RecordItem;
+      const id = createId();
+      state.bac.push({
+        id,
+        nome: body.nome ?? 'Bancarizador',
+        cnpjCpf: body.cnpjCpf ?? '',
+        observacao: body.observacao ?? null,
+        status: 1,
+      });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) });
+      return;
+    }
+
+    if (path === '/bancarizador/update' && method === 'PUT') {
+      const body = route.request().postDataJSON() as RecordItem;
+      const id = String(body.id ?? '');
+      const idx = state.bac.findIndex((item) => item.id === id);
+      if (idx >= 0) {
+        state.bac[idx] = { ...state.bac[idx], observacao: body.observacao ?? state.bac[idx].observacao ?? null };
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    if (/^\/bancarizador\/remove$/.test(path) && method === 'DELETE') {
+      const body = route.request().postDataJSON() as { ids?: string[] };
+      const ids = new Set((body.ids ?? []).map((id) => String(id)));
+      state.bac = state.bac.filter((item) => !ids.has(String(item.id)));
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    if (/^\/bancarizador\/(activate|deactivate)\/[^/]+$/.test(path) && method === 'PUT') {
+      const id = path.split('/').pop() ?? '';
+      const idx = state.bac.findIndex((item) => item.id === id);
+      if (idx >= 0) {
+        state.bac[idx] = { ...state.bac[idx], status: path.includes('/activate/') ? 1 : 2 };
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  const registerPessoaEntityRoutes = (
+    apiName: string,
+    listMethod: 'GET' | 'POST',
+    bucket: RecordItem[],
+    supportsStatus = true,
+    removeMethod: 'DELETE' | 'POST' = 'DELETE',
+  ) => {
+    void page.route(`**/api/${apiName}/**`, async (route) => {
+      const url = new URL(route.request().url());
+      const method = route.request().method();
+      const path = url.pathname;
+
+      if (path === `/${apiName}/get/list` && method === listMethod) {
+        const rows = bucket.map((item) => {
+          const person = people.get(String(item.pessoaId));
+          return {
+            id: item.id,
+            status: item.status ?? 0,
+            pessoa: person
+              ? {
+                  id: person.id,
+                  nome: person.nome,
+                  cnpjCpf: person.cnpjCpf,
+                  cidade: person.cidade,
+                  uf: person.uf,
+                  contatos: person.contatos ?? [],
+                }
+              : null,
+          };
+        });
+
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(createPaged(rows)) });
+        return;
+      }
+
+      if (new RegExp(`^/${apiName}/get/unique/[^/]+$`).test(path) && method === 'GET') {
+        const id = path.split('/').pop() ?? '';
+        const found = bucket.find((item) => item.id === id);
+        if (!found) {
+          await route.fulfill({ status: 404, body: '{}' });
+          return;
+        }
+        const person = people.get(String(found.pessoaId));
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: found.id,
+            status: found.status ?? 0,
+            pessoa: person
+              ? {
+                  id: person.id,
+                  nome: person.nome,
+                  cnpjCpf: person.cnpjCpf,
+                  cidade: person.cidade,
+                  uf: person.uf,
+                  contatos: person.contatos ?? [],
+                }
+              : null,
+          }),
+        });
+        return;
+      }
+
+      if (path === `/${apiName}/register` && method === 'POST') {
+        const contentType = (await route.request().headerValue('content-type')) ?? '';
+        let pessoaId = '';
+
+        if (contentType.includes('multipart/form-data')) {
+          const body = route.request().postData() ?? '';
+          const cnpjCpfMatch = body.match(/name="cnpjCpf"\r\n\r\n([^\r\n]+)/i);
+          const person = ensurePersonByDocument(cnpjCpfMatch?.[1] ?? '');
+          pessoaId = String(person.id);
+        } else {
+          const body = route.request().postDataJSON() as { pessoaId?: string };
+          pessoaId = String(body.pessoaId ?? '');
+        }
+
+        const existing = bucket.find((item) => String(item.pessoaId) === pessoaId);
+        const id = existing?.id ?? createId();
+        if (!existing) {
+          bucket.push({
+            id,
+            pessoaId,
+            status: supportsStatus ? 0 : undefined,
+          });
+        }
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) });
+        return;
+      }
+
+      if (path === `/${apiName}/update` && method === 'PUT') {
+        const body = route.request().postDataJSON() as { id?: string; status?: number };
+        const id = String(body.id ?? '');
+        const idx = bucket.findIndex((item) => item.id === id);
+        if (idx >= 0 && supportsStatus) {
+          bucket[idx] = { ...bucket[idx], status: Number(body.status ?? 0) };
+        }
+        await route.fulfill({ status: 204, body: '' });
+        return;
+      }
+
+      if (removeMethod === 'DELETE' && new RegExp(`^/${apiName}/remove/[^/]+$`).test(path) && method === 'DELETE') {
+        const id = path.split('/').pop() ?? '';
+        const idx = bucket.findIndex((item) => item.id === id);
+        if (idx >= 0) {
+          bucket.splice(idx, 1);
+        }
+        await route.fulfill({ status: 204, body: '' });
+        return;
+      }
+
+      if (removeMethod === 'POST' && path === `/${apiName}/remove` && method === 'POST') {
+        const body = route.request().postDataJSON() as { prestadorServicoId?: string; id?: string };
+        const id = String(body.prestadorServicoId ?? body.id ?? '');
+        const idx = bucket.findIndex((item) => item.id === id);
+        if (idx >= 0) {
+          bucket.splice(idx, 1);
+        }
+        await route.fulfill({ status: 204, body: '' });
+        return;
+      }
+
+      await route.fallback();
+    });
+  };
+
+  registerPessoaEntityRoutes('consultora', 'GET', state.con, true, 'DELETE');
+  registerPessoaEntityRoutes('custodiante', 'GET', state.cus, true, 'DELETE');
+  registerPessoaEntityRoutes('gestora', 'GET', state.ges, true, 'DELETE');
+  registerPessoaEntityRoutes('fornecedor', 'GET', state.frn, true, 'DELETE');
+  registerPessoaEntityRoutes('emitente', 'POST', state.emi, false, 'DELETE');
+  registerPessoaEntityRoutes('investidor', 'GET', state.inv, false, 'DELETE');
+  registerPessoaEntityRoutes('prestadorservico', 'GET', state.pre, false, 'POST');
+
+  await page.route('**/api/cedente/**', async (route) => {
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    const path = url.pathname;
+
+    if ((path === '/cedente/get/list' || path === '/api/cedente/get/list') && method === 'POST') {
+      const rows = state.ced.map((item) => ({
+        id: item.id,
+        nome: item.nome,
+        cnpjCpf: item.cnpjCpf,
+      }));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(createPaged(rows)),
+      });
+      return;
+    }
+
+    if ((path === '/cedente/get/modalidades' || path === '/api/cedente/get/modalidades') && method === 'GET') {
+      const cedenteId = url.searchParams.get('cedenteId') ?? '';
+      const tabs = ensureCedenteTabs(cedenteId);
+      const parametrizacao = Array.isArray(tabs.parametrizacao) ? tabs.parametrizacao : [];
+      const rows = parametrizacao.map((item) => ({
+        modalidade: String((item as Record<string, unknown>).modalidadeNome ?? 'DUPLICATA'),
+        habilitado: true,
+        tipoCalculoOperacao: 'PRAZO',
+      }));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(rows),
+      });
+      return;
+    }
+
+    await route.fallback();
   });
 
   await page.route('**/cadastros/**', async (route) => {
@@ -177,32 +1196,6 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     const url = new URL(route.request().url());
     const method = route.request().method();
     const path = url.pathname;
-
-    const ensurePersonByDocument = (documento: string) => {
-      const normalized = String(documento ?? '').replace(/\D/g, '');
-      const existing = Array.from(people.values()).find((item) => String(item.cnpjCpf ?? '').replace(/\D/g, '') === normalized);
-      if (existing) return existing;
-
-      const personId = createId();
-      const created = {
-        id: personId,
-        nome: `Pessoa ${normalized.slice(-6) || 'Auto'}`,
-        cnpjCpf: normalized,
-        documentoNormalizado: normalized,
-        tipoPessoa: normalized.length > 11 ? 'Juridica' : 'Fisica',
-        email: null,
-        telefone: null,
-        cidade: 'Sao Paulo',
-        uf: 'SP',
-        observacoesGerais: null,
-        ativo: true,
-        enderecos: [],
-        contatos: [],
-        qsas: [],
-      };
-      people.set(personId, created);
-      return created;
-    };
 
     if (path === '/cadastros/administradoras/auto-cadastro' && method === 'POST') {
       const body = route.request().postDataJSON() as { documento?: string };
@@ -538,6 +1531,8 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
     const pick = () => {
       if (path.startsWith('/cadastros/administradoras')) return state.adm;
       if (path.startsWith('/cadastros/agentes')) return state.age;
+      if (path.startsWith('/cadastros/testemunhas')) return state.tes;
+      if (path.startsWith('/cadastros/bancarizadores')) return state.bac;
       if (path.startsWith('/cadastros/cedentes')) return state.ced;
       if (path.startsWith('/cadastros/representantes')) return state.rep;
       return state.ban;
@@ -797,6 +1792,34 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
       return;
     }
 
+    if (path === '/MovimentoFinanceiro/get/list' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: state.movimentacoes,
+          page: 0,
+          pageSize: 100,
+          totalItems: state.movimentacoes.length,
+        }),
+      });
+      return;
+    }
+
+    if (path === '/MovimentoFinanceiro/get/saldoContas' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          state.movimentacoes.map((item) => ({
+            conta: item.conta,
+            valorSaldo: 15000 - Number(item.valorDespesa ?? item.valorPago ?? 0),
+          })),
+        ),
+      });
+      return;
+    }
+
     await route.fallback();
   });
 };
@@ -809,6 +1832,10 @@ const login = async (
   await page.goto('/login');
   await page.locator('input[type="email"]').fill('admin@black101.local');
   await page.locator('input[type="password"]').fill(password);
+  const captchaButton = page.getByRole('button', { name: 'Validar acesso' });
+  if (await captchaButton.isVisible()) {
+    await captchaButton.click();
+  }
   await page.getByRole('button', { name: 'Login' }).click();
 
   if (expectSuccess) {
@@ -840,6 +1867,68 @@ test('login com falha', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Login' })).toBeVisible();
 });
 
+test('login legado com 2fa', async ({ page }) => {
+  await page.route('**/auth/login', async (route) => {
+    await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'not found' }) });
+  });
+  await page.route('**/auth/me', async (route) => {
+    await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'not found' }) });
+  });
+  await page.route('**/api/authentication/login', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model: { requiresTwoFactorCode: true, requiresTwoFactorSetup: false, qrCode: '' },
+        code: 200,
+      }),
+    });
+  });
+  await page.route('**/api/authentication/validateQrcode', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { token: 'legacy-pre-token' }, code: 200 }),
+    });
+  });
+  await page.route('**/authentication/two-factor/email/envio', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { sent: true }, code: 200 }),
+    });
+  });
+  await page.route('**/api/user/get/context', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model: {
+          id: '1',
+          nome: 'Administrador Black101',
+          email: 'admin@black101.local',
+          fidcs: [{ id: '00000000-0000-0000-0000-000000000001', nome: 'FIDC Seed', cnpjCpf: '12345678000199' }],
+          roles: ['ADMIN'],
+          claims: ['CAD_ADM_L'],
+        },
+        code: 200,
+      }),
+    });
+  });
+
+  await page.goto('/login');
+  const captchaButton = page.getByRole('button', { name: 'Validar acesso' });
+  if (await captchaButton.isVisible()) {
+    await captchaButton.click();
+  }
+  await page.getByRole('button', { name: 'Login' }).click();
+  await expect(page.getByText('Black101 Authenticator')).toBeVisible();
+  await page.getByRole('button', { name: 'Código por e-mail' }).click();
+  await page.locator('input[inputmode="numeric"]').fill('123456');
+  await page.getByRole('button', { name: 'Validar código' }).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test('navegação do mega menu', async ({ page }, testInfo) => {
   await login(page);
   await expect(page.getByText('Portal Black101')).toBeVisible();
@@ -867,6 +1956,10 @@ test('layout sem overflow horizontal global', async ({ page }) => {
 
   await assertNoPageHorizontalOverflow(page);
   await page.goto('/cadastro/administradoras');
+  await assertNoPageHorizontalOverflow(page);
+  await page.goto('/financeiro/movimentacoes');
+  await assertNoPageHorizontalOverflow(page);
+  await page.goto('/operacoes/importacoes');
   await assertNoPageHorizontalOverflow(page);
   await page.goto('/operacoes');
   await assertNoPageHorizontalOverflow(page);
@@ -913,7 +2006,44 @@ const runCrudAgentesFull = async (page: import('@playwright/test').Page, suffix:
   const hasRows = await page.locator('.table-wrap tbody tr').count();
   if (hasRows > 0) {
     page.on('dialog', async (dialog) => dialog.accept());
-    await page.locator('.table-wrap tbody tr').first().locator('button:has-text("Excluir")').click();
+    const deleteButtons = page.getByRole('button', { name: 'Excluir' });
+    const deleteCount = await deleteButtons.count();
+    if (deleteCount > 0) {
+      await deleteButtons.first().click();
+    }
+  }
+};
+
+const runCrudBasicoPessoaFull = async (
+  page: import('@playwright/test').Page,
+  suffix: string,
+  options: {
+    listUrl: string;
+    createButton: string;
+    editedNamePrefix: string;
+  },
+) => {
+  await page.goto(options.listUrl);
+  await page.getByRole('button', { name: options.createButton }).click();
+
+  await page.locator('.modal-card label:has-text("CPF/CNPJ") input').first().fill('04.252.011/0001-10');
+  await page.getByRole('button', { name: 'Avançar' }).click();
+  await expect(page).toHaveURL(new RegExp(`${options.listUrl}/`));
+
+  await page.locator('label:has-text("Nome") input').first().fill(`${options.editedNamePrefix} ${suffix}`);
+  await page.locator('label:has-text("E-mail") input').first().fill(`basico${suffix}@mail.com`);
+  await page.locator('label:has-text("Telefone") input').first().fill('(11) 98888-0000');
+  await page.locator('label:has-text("Cidade") input').first().fill('Sao Paulo');
+  await page.locator('label:has-text("UF") input').first().fill('SP');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+
+  await page.getByRole('button', { name: 'Voltar para listagem' }).click();
+  await expect(page).toHaveURL(new RegExp(`${options.listUrl}$`));
+
+  const deleteButtons = page.getByRole('button', { name: 'Excluir' });
+  if (await deleteButtons.count()) {
+    page.on('dialog', async (dialog) => dialog.accept());
+    await deleteButtons.first().click();
   }
 };
 
@@ -932,10 +2062,10 @@ const runCrudBancosFull = async (page: import('@playwright/test').Page, suffix: 
   await page.getByRole('button', { name: 'Voltar para listagem' }).click();
   await expect(page).toHaveURL(/\/cadastro\/bancos$/);
 
-  const hasRows = await page.locator('.table-wrap tbody tr').count();
-  if (hasRows > 0) {
+  const deleteButtons = page.getByRole('button', { name: 'Excluir' });
+  if (await deleteButtons.count()) {
     page.on('dialog', async (dialog) => dialog.accept());
-    await page.locator('.table-wrap tbody tr').first().locator('button:has-text("Excluir")').click();
+    await deleteButtons.first().click();
   }
 };
 
@@ -1005,6 +2135,47 @@ test('crud agentes', async ({ page }) => {
   await login(page);
   const suffix = Date.now().toString().slice(-6);
   await runCrudAgentesFull(page, suffix);
+});
+
+test('crud consultoras', async ({ page }) => {
+  await login(page);
+  const suffix = Date.now().toString().slice(-6);
+  await runCrudBasicoPessoaFull(page, suffix, {
+    listUrl: '/cadastro/consultoras',
+    createButton: 'Nova consultora',
+    editedNamePrefix: 'Consultora',
+  });
+});
+
+test('crud investidores', async ({ page }) => {
+  await login(page);
+  const suffix = Date.now().toString().slice(-6);
+  await runCrudBasicoPessoaFull(page, suffix, {
+    listUrl: '/cadastro/investidores',
+    createButton: 'Novo investidor',
+    editedNamePrefix: 'Investidor',
+  });
+});
+
+test('modalidades por cedente', async ({ page }, testInfo) => {
+  await login(page);
+  await page.goto('/cadastro/modalidades');
+  await expect(page.locator('.toolbar select')).toBeVisible();
+  if (testInfo.project.name.includes('mobile')) {
+    await expect(page.locator('.table-mobile-cards').getByText('DUPLICATA').first()).toBeVisible();
+  } else {
+    await expect(page.getByRole('cell', { name: 'DUPLICATA' }).first()).toBeVisible();
+  }
+});
+
+test('crud prestadores', async ({ page }) => {
+  await login(page);
+  const suffix = Date.now().toString().slice(-6);
+  await runCrudBasicoPessoaFull(page, suffix, {
+    listUrl: '/cadastro/prestadores',
+    createButton: 'Novo prestador',
+    editedNamePrefix: 'Prestador',
+  });
 });
 
 test('crud bancos', async ({ page }) => {
