@@ -22,6 +22,10 @@ describe('loginFlow', () => {
     });
 
     expect(result.kind).toBe('two_factor_required');
+    if (result.kind !== 'two_factor_required') {
+      throw new Error('resultado inesperado');
+    }
+    expect(result.kind).toBe('two_factor_required');
     expect(result.requiresTwoFactorSetup).toBe(true);
     expect(result.qrCode).toBe('data:image/png;base64,abc');
   });
@@ -33,6 +37,9 @@ describe('loginFlow', () => {
     });
 
     expect(result.kind).toBe('two_factor_required');
+    if (result.kind !== 'two_factor_required') {
+      throw new Error('resultado inesperado');
+    }
     expect(result.requiresTwoFactorSetup).toBe(false);
     expect(result.qrCode).toBe('data:image/png;base64,xyz');
   });
@@ -44,6 +51,9 @@ describe('loginFlow', () => {
     });
 
     expect(result.kind).toBe('two_factor_required');
+    if (result.kind !== 'two_factor_required') {
+      throw new Error('resultado inesperado');
+    }
     expect(result.requiresTwoFactorSetup).toBe(false);
     expect(result.qrCode).toBe('');
   });

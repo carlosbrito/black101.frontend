@@ -436,7 +436,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     user,
     roles,
     claims,
-    hasMicrosoftSso: entraIdAuth.hasValidConfiguration(),
+    hasMicrosoftSso: entraIdAuth.hasValidConfiguration() || import.meta.env.DEV,
     segmentoEmpresa,
     isSecuritizadora: segmentoEmpresa === SegmentoEmpresa.Securitizadora,
     contextEmpresas,

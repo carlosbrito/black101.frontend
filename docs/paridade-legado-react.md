@@ -18,7 +18,7 @@
 
 | Domínio | Legado (Angular) | React | Status |
 |---|---|---|---|
-| Login/autenticação | `/login` + 2FA + gettoken/context | `src/features/login/LoginPage.tsx` + `src/app/auth/AuthContext.tsx` | Parcial (2FA legado migrado) |
+| Login/autenticação | `/login` + 2FA + gettoken/context | `src/features/login/LoginPage.tsx` + `src/app/auth/AuthContext.tsx` | Parcial (fluxo principal migrado) |
 | Cadastros | Módulo `register` | `src/features/cadastros/**` | Em andamento |
 | Operações | Módulo `operation` | `src/features/operacoes/**` | Em andamento |
 | Financeiro | Módulo `financial` | `src/features/financeiro/**` | Parcial (movimentações migrado) |
@@ -76,6 +76,13 @@
 - `src/features/cadastros/modalidades/ModalidadesListPage.tsx`
   - migração para consulta real via `/api/cedente/get/list` + `/api/cedente/get/modalidades`
   - CRUD dedicado removido (não há controller de `Modalidade` no backend atual)
+- `src/features/login/LoginPage.tsx`
+- `src/features/login/components/**`
+- `src/app/auth/AuthContext.tsx`
+  - login React revisado com captcha, fallback moderno/legado, troca de token legado, login via Microsoft Entra e fluxo completo de 2FA com setup, QR code, autenticação por app e código por e-mail
+  - cobertura de componente em `src/features/login/LoginPage.test.tsx`
+  - cobertura Playwright dedicada em `e2e/login.spec.ts`
+  - pendências remanescentes concentradas em refinos visuais e validação final integrada contra ambiente real configurado com Turnstile/Entra
 - `src/features/financeiro/MovimentacoesPage.tsx`
 - `src/features/financeiro/movimentacoes/**`
   - módulo de movimentações financeiras migrado para React com lista, cards de saldo, filtros, criação/edição por tipo, exclusão individual, histórico, importação em duas etapas, exclusão/baixa/reabertura em lote, exportação e relatório

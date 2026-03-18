@@ -246,8 +246,24 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
 
   await page.route('**/authentication/login', loginHandler);
   await page.route('**/authentication/logout', logoutHandler);
+  await page.route('**/authentication/login-entra', async (route) => {
+    state.loggedIn = true;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { token: 'legacy-pre-token' }, code: 200 }),
+    });
+  });
   await page.route('**/api/authentication/login', loginHandler);
   await page.route('**/api/authentication/logout', logoutHandler);
+  await page.route('**/api/authentication/login-entra', async (route) => {
+    state.loggedIn = true;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { token: 'legacy-pre-token' }, code: 200 }),
+    });
+  });
   await page.route('**/authentication/gettoken', async (route) => {
     await route.fulfill({
       status: 200,
@@ -276,6 +292,20 @@ const setupApiMock = async (page: import('@playwright/test').Page) => {
   };
   await page.route('**/authentication/validateQrcode', validateQrcodeHandler);
   await page.route('**/api/authentication/validateQrcode', validateQrcodeHandler);
+  await page.route('**/authentication/two-factor/configuration', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { tiposAtivados: [] }, code: 200 }),
+    });
+  });
+  await page.route('**/authentication/two-factor/email/envio', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { sent: true }, code: 200 }),
+    });
+  });
   const generateQrCodeHandler = async (route: import('@playwright/test').Route) => {
     await route.fulfill({
       status: 200,
@@ -1774,6 +1804,10 @@ const login = async (
   await page.goto('/login');
   await page.locator('input[type="email"]').fill('admin@black101.local');
   await page.locator('input[type="password"]').fill(password);
+  const captchaButton = page.getByRole('button', { name: 'Validar acesso' });
+  if (await captchaButton.isVisible()) {
+    await captchaButton.click();
+  }
   await page.getByRole('button', { name: 'Login' }).click();
 
   if (expectSuccess) {
@@ -1829,6 +1863,13 @@ test('login legado com 2fa', async ({ page }) => {
       body: JSON.stringify({ model: { token: 'legacy-pre-token' }, code: 200 }),
     });
   });
+  await page.route('**/authentication/two-factor/email/envio', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: { sent: true }, code: 200 }),
+    });
+  });
   await page.route('**/api/user/get/context', async (route) => {
     await route.fulfill({
       status: 200,
@@ -1848,9 +1889,14 @@ test('login legado com 2fa', async ({ page }) => {
   });
 
   await page.goto('/login');
+  const captchaButton = page.getByRole('button', { name: 'Validar acesso' });
+  if (await captchaButton.isVisible()) {
+    await captchaButton.click();
+  }
   await page.getByRole('button', { name: 'Login' }).click();
-  await expect(page.getByText('Código 2FA')).toBeVisible();
-  await page.locator('input[type="text"]').first().fill('123456');
+  await expect(page.getByText('Black101 Authenticator')).toBeVisible();
+  await page.getByRole('button', { name: 'Código por e-mail' }).click();
+  await page.locator('input[inputmode="numeric"]').fill('123456');
   await page.getByRole('button', { name: 'Validar código' }).click();
   await expect(page).toHaveURL(/\/$/);
 });
