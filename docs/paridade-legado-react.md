@@ -60,6 +60,27 @@
 - `src/features/cadastros/testemunhas/TestemunhasListPage.tsx`
 - `src/features/cadastros/testemunhas/TestemunhaFormPage.tsx`
   - alinhados para `/api/testemunha/get/list|get/unique|register|update|remove`
+- `src/features/cadastros/administradoras/AdministradorasListPage.tsx`
+- `src/features/cadastros/administradoras/AdministradoraFormPage.tsx`
+  - listagem/remoção alinhadas para `/api/administradora/get/list|remove`
+  - entrada por documento alinhada ao legado via `/api/pessoa/get/cnpjcpf/{documento}`
+- `src/features/cadastros/cedentes/CedentesListPage.tsx`
+- `src/features/cadastros/cedentes/CedenteFormPage.tsx`
+  - listagem principal alinhada para `POST /api/cedente/get/list`
+  - remoção alinhada para `/api/cedente/remove`
+  - entrada por documento alinhada ao legado via `/api/pessoa/get/cnpjcpf/{documento}`
+- `src/features/cadastros/sacados/SacadosListPage.tsx`
+- `src/features/cadastros/sacados/SacadoFormPage.tsx`
+  - listagem principal alinhada para `POST /api/sacado/get/list`
+  - remoção alinhada para `/api/sacado/remove`
+  - entrada por documento alinhada ao legado via `/api/pessoa/get/cnpjcpf/{documento}`
+- `src/features/cadastros/BasicosPages.tsx`
+- `src/features/cadastros/CadastroCrudPage.tsx`
+- `src/features/cadastros/basicos/entityApi.ts`
+  - `Empresas` alinhado para o contrato legado de `fidc`
+  - `Certificadoras` alinhado para `certificadora/get|register|update|remove`
+  - `Grupo Econômico` alinhado para `grupoEconomico/get|register|update|remove`
+  - `Índices Debênture` ajustado para fonte estática local, sem backend remoto
   - criação/edição com vínculo via `/api/pessoa/get/cnpjcpf|register|update`
 - `src/features/cadastros/representantes/RepresentantesListPage.tsx`
 - `src/features/cadastros/representantes/RepresentanteFormPage.tsx`

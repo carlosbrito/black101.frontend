@@ -24,6 +24,19 @@ export const buildEntityPath = (api: BasicoEntityApi, path: string, id?: string)
 };
 
 export const basicoEntityApis: Record<string, BasicoEntityApi> = {
+  fidc: {
+    key: 'fidc',
+    basePath: '/api/fidc',
+    listMethod: 'get',
+    listPath: '/get/list',
+    searchParam: 'keyword',
+    uniquePath: '/get/unique/{id}',
+    registerPath: '/register',
+    updatePath: '/update',
+    removeMethod: 'delete',
+    removePath: '/remove/{id}',
+    supportsStatus: true,
+  },
   consultora: {
     key: 'consultora',
     basePath: '/api/consultora',
@@ -99,6 +112,32 @@ export const basicoEntityApis: Record<string, BasicoEntityApi> = {
     removeMethod: 'delete',
     removePath: '/remove/{id}',
     supportsStatus: false,
+  },
+  certificadora: {
+    key: 'certificadora',
+    basePath: '/api/certificadora',
+    listMethod: 'get',
+    listPath: '/get/list',
+    searchParam: 'keyword',
+    uniquePath: '/get/unique/{id}',
+    registerPath: '/register',
+    updatePath: '/update',
+    removeMethod: 'delete',
+    removePath: '/remove/{id}',
+    supportsStatus: true,
+  },
+  grupoEconomico: {
+    key: 'grupoEconomico',
+    basePath: '/api/grupoEconomico',
+    listMethod: 'get',
+    listPath: '/get/list',
+    searchParam: 'keyword',
+    uniquePath: '/get/unique/{id}',
+    registerPath: '/register',
+    updatePath: '/update',
+    removeMethod: 'delete',
+    removePath: '/remove/{id}',
+    supportsStatus: true,
   },
   prestador: {
     key: 'prestador',

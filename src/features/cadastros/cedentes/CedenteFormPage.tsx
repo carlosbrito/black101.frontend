@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../../app/auth/AuthContext';
 import { CONTEXTO_EMPRESA_HEADER, getErrorMessage, http, requiresEmpresaChoice } from '../../../shared/api/http';
@@ -537,6 +537,7 @@ const createQsaForm = () => ({
 export const CedenteFormPage = () => {
   const { contextEmpresas, selectedEmpresaIds } = useAuth();
   const params = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const cedenteId = params.id;
   const isEdit = !!cedenteId;
@@ -779,6 +780,22 @@ export const CedenteFormPage = () => {
   useEffect(() => {
     const bootstrap = async () => {
       if (!cedenteId) {
+        const documento = sanitizeDocument(searchParams.get('documento') ?? '');
+        if (documento) {
+          try {
+            const pessoaRes = await http.get(`/api/pessoa/get/cnpjcpf/${documento}`, {
+              params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
+            });
+            const pessoa = pessoaRes.data as PessoaDto;
+            if (pessoa?.id && pessoa.id !== '00000000-0000-0000-0000-000000000000') {
+              syncPessoaForm(pessoa);
+            } else {
+              setPessoaForm((current) => ({ ...current, cnpjCpf: applyCpfCnpjMask(documento) }));
+            }
+          } catch (error) {
+            toast.error(getErrorMessage(error));
+          }
+        }
         setLoading(false);
         return;
       }
@@ -803,7 +820,7 @@ export const CedenteFormPage = () => {
     };
 
     void bootstrap();
-  }, [cedenteId]);
+  }, [cedenteId, searchParams]);
 
   useEffect(() => {
     if (!visibleTabs.some((item) => item.key === activeTab)) {

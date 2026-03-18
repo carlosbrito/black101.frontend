@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../../shared/api/http';
 import { PageFrame } from '../../../shared/ui/PageFrame';
@@ -34,6 +34,7 @@ const parseNumber = (value: string): number | null => {
 
 export const SacadoFormPage = () => {
   const { id: sacadoId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isEdit = !!sacadoId;
   const [loading, setLoading] = useState(isEdit);
@@ -88,7 +89,37 @@ export const SacadoFormPage = () => {
 
   useEffect(() => {
     const boot = async () => {
-      if (!sacadoId) { setLoading(false); return; }
+      if (!sacadoId) {
+        const documento = sanitizeDocument(searchParams.get('documento') ?? '');
+        if (documento) {
+          try {
+            const pessoaResponse = await http.get(`/api/pessoa/get/cnpjcpf/${documento}`, {
+              params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
+            });
+            const pessoa = pessoaResponse.data as {
+              nome?: string;
+              cnpjCpf?: string;
+              contatos?: Array<{ email?: string | null; telefone1?: string | null; telefone2?: string | null }>;
+              enderecos?: Array<{ cidade?: string | null; estado?: string | null }>;
+            };
+            const contato = pessoa?.contatos?.[0];
+            const endereco = pessoa?.enderecos?.[0];
+            setForm((current) => ({
+              ...current,
+              nome: pessoa?.nome ?? current.nome,
+              cnpjCpf: applyCpfCnpjMask(pessoa?.cnpjCpf ?? documento),
+              email: contato?.email ?? current.email,
+              telefone: applyPhoneMask(contato?.telefone1 ?? contato?.telefone2 ?? ''),
+              cidade: endereco?.cidade ?? current.cidade,
+              uf: endereco?.estado ?? current.uf,
+            }));
+          } catch (e) {
+            toast.error(getErrorMessage(e));
+          }
+        }
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
         const r = await http.get(`/cadastros/sacados/${sacadoId}`);
@@ -102,7 +133,7 @@ export const SacadoFormPage = () => {
       }
     };
     void boot();
-  }, [sacadoId]);
+  }, [sacadoId, searchParams]);
 
   const saveSacado = async (event: FormEvent) => {
     event.preventDefault();

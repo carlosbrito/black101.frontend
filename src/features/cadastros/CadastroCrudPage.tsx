@@ -7,6 +7,8 @@ import { DataTable } from '../../shared/ui/DataTable';
 import type { Column } from '../../shared/ui/DataTable';
 import { PageFrame } from '../../shared/ui/PageFrame';
 import { applyCpfCnpjMask, applyPhoneMask, isValidCpfCnpj, isValidPhone, sanitizeDocument } from './cadastroCommon';
+import type { BasicoEntityApi } from './basicos/entityApi';
+import { buildEntityPath } from './basicos/entityApi';
 import './cadastro.css';
 
 type FieldDef = {
@@ -23,6 +25,13 @@ type FormValue = string | boolean;
 type LookupData = Record<string, FormValue>;
 type ExtraListItem = { id: string; [key: string]: string | number | boolean | null | undefined };
 type PagedLikeResponse<T> = { items?: T[]; Items?: T[]; page?: number; Page?: number; totalPages?: number; TotalPages?: number };
+type CrudApiMapper = {
+  api: BasicoEntityApi;
+  mapListItem?: (item: Record<string, unknown>) => CrudRecord;
+  mapUniqueItem?: (item: Record<string, unknown>) => CrudRecord;
+  buildCreatePayload?: (form: Record<string, FormValue>) => Record<string, unknown>;
+  buildUpdatePayload?: (id: string, form: Record<string, FormValue>) => Record<string, unknown>;
+};
 
 const toBool = (value: unknown) => value === true || value === 'true' || value === 1;
 
@@ -53,6 +62,7 @@ export const CadastroCrudPage = ({
   documentModalTitle = 'Novo registro',
   documentFieldLabel = 'CPF/CNPJ',
   onAutoCreateByDocumento,
+  apiMapper,
 }: {
   title: string;
   subtitle: string;
@@ -66,6 +76,7 @@ export const CadastroCrudPage = ({
   documentModalTitle?: string;
   documentFieldLabel?: string;
   onAutoCreateByDocumento?: (documento: string) => Promise<AutoCreateResult | null>;
+  apiMapper?: CrudApiMapper;
 }) => {
   const [rows, setRows] = useState<CrudRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,20 +147,43 @@ export const CadastroCrudPage = ({
   const list = async () => {
     setLoading(true);
     try {
-      const response = await http.get<PagedResponse<CrudRecord>>(endpoint, {
-        params: {
-          page,
-          pageSize,
-          search: search || undefined,
-        },
-      });
+      if (apiMapper) {
+        const response = apiMapper.api.listMethod === 'post'
+          ? await http.post(buildEntityPath(apiMapper.api, apiMapper.api.listPath), {
+              page,
+              pageSize,
+              [apiMapper.api.searchParam]: search || undefined,
+            })
+          : await http.get(buildEntityPath(apiMapper.api, apiMapper.api.listPath), {
+              params: {
+                page,
+                pageSize,
+                [apiMapper.api.searchParam]: search || undefined,
+              },
+            });
 
-      const data = response.data as unknown as Record<string, unknown>;
-      const itemsRaw = (data.items ?? data.Items ?? []) as unknown[];
-      const loaded = normalizeRows(itemsRaw);
-      setRows(loaded);
-      setTotalPages(Number(data.totalPages ?? data.TotalPages ?? 1));
-      setTotalItems(Number(data.totalItems ?? data.TotalItems ?? loaded.length));
+        const data = response.data as Record<string, unknown>;
+        const itemsRaw = (data.items ?? data.Items ?? []) as Record<string, unknown>[];
+        const loaded = (apiMapper.mapListItem ? itemsRaw.map(apiMapper.mapListItem) : normalizeRows(itemsRaw)) as CrudRecord[];
+        setRows(loaded);
+        setTotalPages(Number(data.totalPages ?? data.TotalPages ?? 1));
+        setTotalItems(Number(data.totalItems ?? data.TotalItems ?? loaded.length));
+      } else {
+        const response = await http.get<PagedResponse<CrudRecord>>(endpoint, {
+          params: {
+            page,
+            pageSize,
+            search: search || undefined,
+          },
+        });
+
+        const data = response.data as unknown as Record<string, unknown>;
+        const itemsRaw = (data.items ?? data.Items ?? []) as unknown[];
+        const loaded = normalizeRows(itemsRaw);
+        setRows(loaded);
+        setTotalPages(Number(data.totalPages ?? data.TotalPages ?? 1));
+        setTotalItems(Number(data.totalItems ?? data.TotalItems ?? loaded.length));
+      }
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -158,11 +192,16 @@ export const CadastroCrudPage = ({
   };
   useEffect(() => {
     void list();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openEditById = async (id: string) => {
-    const response = await http.get(`${endpoint}/${id}`);
-    const normalized = normalizeRows([response.data as unknown]);
+    const response = apiMapper
+      ? await http.get(buildEntityPath(apiMapper.api, apiMapper.api.uniquePath, id))
+      : await http.get(`${endpoint}/${id}`);
+    const raw = response.data as Record<string, unknown>;
+    const normalized = apiMapper?.mapUniqueItem
+      ? [apiMapper.mapUniqueItem(raw)]
+      : normalizeRows([raw as unknown]);
     const row = normalized[0];
     if (!row) {
       throw new Error('Registro não encontrado para edição.');
@@ -209,7 +248,15 @@ export const CadastroCrudPage = ({
     if (!window.confirm(`Excluir registro '${row.nome ?? row.name ?? row.id}'?`)) return;
 
     try {
-      await http.delete(`${endpoint}/${row.id}`);
+      if (apiMapper) {
+        if (apiMapper.api.removeMethod === 'post') {
+          await http.post(buildEntityPath(apiMapper.api, apiMapper.api.removePath), apiMapper.api.removeBody?.(row.id) ?? { id: row.id });
+        } else {
+          await http.delete(buildEntityPath(apiMapper.api, apiMapper.api.removePath, row.id));
+        }
+      } else {
+        await http.delete(`${endpoint}/${row.id}`);
+      }
       toast.success('Registro removido.');
       await list();
     } catch (error) {
@@ -223,10 +270,22 @@ export const CadastroCrudPage = ({
 
     try {
       if (current) {
-        await http.put(`${endpoint}/${current.id}`, form);
+        if (apiMapper) {
+          const payload = apiMapper.buildUpdatePayload
+            ? apiMapper.buildUpdatePayload(current.id, form)
+            : { id: current.id, ...form };
+          await http.put(buildEntityPath(apiMapper.api, apiMapper.api.updatePath ?? apiMapper.api.registerPath), payload);
+        } else {
+          await http.put(`${endpoint}/${current.id}`, form);
+        }
         toast.success('Registro atualizado.');
       } else {
-        await http.post(endpoint, form);
+        if (apiMapper) {
+          const payload = apiMapper.buildCreatePayload ? apiMapper.buildCreatePayload(form) : form;
+          await http.post(buildEntityPath(apiMapper.api, apiMapper.api.registerPath), payload);
+        } else {
+          await http.post(endpoint, form);
+        }
         toast.success('Registro criado.');
       }
 

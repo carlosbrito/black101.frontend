@@ -2,11 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { useAuth } from '../../../app/auth/AuthContext';
-import { CONTEXTO_EMPRESA_HEADER, getErrorMessage, http, requiresEmpresaChoice } from '../../../shared/api/http';
+import { getErrorMessage, http } from '../../../shared/api/http';
 import { DataTable } from '../../../shared/ui/DataTable';
 import type { Column } from '../../../shared/ui/DataTable';
-import { EmpresaPickerDialog } from '../../../shared/ui/EmpresaPickerDialog';
 import { PageFrame } from '../../../shared/ui/PageFrame';
 import { applyCpfCnpjMask, formatCpfCnpj, isValidCpfCnpj, readPagedResponse, sanitizeDocument } from '../cadastroCommon';
 import '../cadastro.css';
@@ -21,6 +19,25 @@ type CedenteRow = {
   cidade?: string | null;
   uf?: string | null;
   ativo: boolean;
+};
+
+type CedenteApiRow = {
+  id: string;
+  status?: number | string;
+  pessoa?: {
+    id?: string;
+    nome?: string;
+    cnpjCpf?: string;
+    contatos?: Array<{
+      email?: string | null;
+      telefone1?: string | null;
+      telefone2?: string | null;
+    }>;
+    enderecos?: Array<{
+      cidade?: string | null;
+      estado?: string | null;
+    }>;
+  };
 };
 
 type LandingMetric = {
@@ -69,15 +86,39 @@ const landingMetrics: LandingMetric[] = [
 ];
 
 const fetchCedentesPage = async (page: number, pageSize: number, search: string) => {
-  const response = await http.get('/cadastros/cedentes', {
-    params: {
-      page,
-      pageSize,
-      search: search || undefined,
-    },
+  const response = await http.post('/api/cedente/get/list', {
+    page,
+    pageSize,
+    keyword: search || undefined,
   });
 
-  return readPagedResponse<CedenteRow>(response.data);
+  const paged = readPagedResponse<CedenteApiRow>(response.data);
+  return {
+    ...paged,
+    items: paged.items.map((item) => {
+      const endereco = item.pessoa?.enderecos?.[0];
+      const rawStatus = item.status;
+      const numericStatus = typeof rawStatus === 'number' ? rawStatus : null;
+      const status = typeof rawStatus === 'string'
+        ? rawStatus
+        : numericStatus === 0
+          ? 'Ativo'
+          : numericStatus === 1
+            ? 'Inativo'
+            : '-';
+
+      return {
+        id: item.id,
+        pessoaId: item.pessoa?.id ?? '',
+        nome: item.pessoa?.nome ?? '',
+        cnpjCpf: item.pessoa?.cnpjCpf ?? '',
+        status,
+        cidade: endereco?.cidade ?? '',
+        uf: endereco?.estado ?? '',
+        ativo: numericStatus === null ? status.toUpperCase() !== 'INATIVO' : numericStatus === 0,
+      } satisfies CedenteRow;
+    }),
+  };
 };
 
 const normalizeLookupValue = (value: string) => value.trim().toLowerCase();
@@ -228,7 +269,7 @@ const CedentesListSection = ({
     }
 
     try {
-      await http.delete(`/cadastros/cedentes/${row.id}`);
+      await http.delete(`/api/cedente/remove/${row.id}`);
       toast.success('Cedente removido.');
 
       const paged = await fetchCedentesPage(page, pageSize, search);
@@ -294,7 +335,6 @@ const CedentesListSection = ({
 };
 
 export const CedentesPage = () => {
-  const { contextEmpresas, selectedEmpresaIds } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<'landing' | 'list'>('landing');
   const [landingQuery, setLandingQuery] = useState('');
@@ -303,8 +343,6 @@ export const CedentesPage = () => {
   const [documentModalOpen, setDocumentModalOpen] = useState(false);
   const [documento, setDocumento] = useState('');
   const [creating, setCreating] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerCallback, setPickerCallback] = useState<((empresaId: string) => Promise<void>) | null>(null);
 
   const openList = (searchValue = '') => {
     setListSearch(searchValue);
@@ -321,46 +359,9 @@ export const CedentesPage = () => {
 
     setCreating(true);
     try {
-      const send = async (empresaId?: string) => {
-        const response = await http.post('/cadastros/cedentes/auto-cadastro', { documento: doc }, {
-          headers: empresaId ? { [CONTEXTO_EMPRESA_HEADER]: empresaId } : undefined,
-        });
-        return response.data as Record<string, unknown>;
-      };
-
-      try {
-        const data = await send();
-        const id = String(data.cedenteId ?? data.CedenteId ?? '');
-        if (!id) {
-          toast.error('Não foi possível criar o cedente.');
-          return;
-        }
-
-        const message = String(data.mensagem ?? data.Mensagem ?? '');
-        if (message) toast.success(message);
-        setDocumentModalOpen(false);
-        setDocumento('');
-        navigate(`/cadastro/cedentes/${id}`);
-      } catch (error) {
-        if (!requiresEmpresaChoice(error) || selectedEmpresaIds.length <= 1) {
-          throw error;
-        }
-
-        setPickerOpen(true);
-        setPickerCallback(() => async (empresaId: string) => {
-          const data = await send(empresaId);
-          const id = String(data.cedenteId ?? data.CedenteId ?? '');
-          if (!id) {
-            throw new Error('Não foi possível criar o cedente.');
-          }
-
-          const message = String(data.mensagem ?? data.Mensagem ?? '');
-          if (message) toast.success(message);
-          setDocumentModalOpen(false);
-          setDocumento('');
-          navigate(`/cadastro/cedentes/${id}`);
-        });
-      }
+      setDocumentModalOpen(false);
+      setDocumento('');
+      navigate(`/cadastro/cedentes/novo?documento=${doc}`);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -451,26 +452,6 @@ export const CedentesPage = () => {
           </div>
         </div>
       ) : null}
-      <EmpresaPickerDialog
-        open={pickerOpen}
-        options={contextEmpresas.filter((item) => selectedEmpresaIds.includes(item.id)).map((item) => ({ id: item.id, nome: item.nome }))}
-        onClose={() => {
-          setPickerOpen(false);
-          setPickerCallback(null);
-        }}
-        onConfirm={(empresaId) => {
-          const callback = pickerCallback;
-          setPickerOpen(false);
-          setPickerCallback(null);
-          if (!callback) {
-            return;
-          }
-
-          void callback(empresaId).catch((error) => {
-            toast.error(getErrorMessage(error));
-          });
-        }}
-      />
     </PageFrame>
   );
 };

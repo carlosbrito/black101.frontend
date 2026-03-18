@@ -21,11 +21,23 @@ type SacadoRow = {
   ativo: boolean;
 };
 
-type AutoCreateResult = {
-  sacadoId?: string;
-  SacadoId?: string;
-  mensagem?: string;
-  Mensagem?: string;
+type SacadoApiRow = {
+  id: string;
+  status?: number;
+  pessoa?: {
+    id?: string;
+    nome?: string;
+    cnpjCpf?: string;
+    contatos?: Array<{
+      email?: string | null;
+      telefone1?: string | null;
+      telefone2?: string | null;
+    }>;
+    enderecos?: Array<{
+      cidade?: string | null;
+      estado?: string | null;
+    }>;
+  };
 };
 
 const columns: Column<SacadoRow>[] = [
@@ -64,16 +76,30 @@ export const SacadosPage = () => {
     setLoading(true);
 
     try {
-      const response = await http.get('/cadastros/sacados', {
-        params: {
-          page,
-          pageSize,
-          search: search || undefined,
-        },
+      const response = await http.post('/api/sacado/get/list', {
+        page,
+        pageSize,
+        keyword: search || undefined,
       });
 
-      const paged = readPagedResponse<SacadoRow>(response.data);
-      setRows(paged.items);
+      const paged = readPagedResponse<SacadoApiRow>(response.data);
+      setRows(
+        paged.items.map((item) => {
+          const contato = item.pessoa?.contatos?.[0];
+          const endereco = item.pessoa?.enderecos?.[0];
+          return {
+            id: item.id,
+            pessoaId: item.pessoa?.id ?? '',
+            nome: item.pessoa?.nome ?? '',
+            documento: item.pessoa?.cnpjCpf ?? '',
+            email: contato?.email ?? '',
+            telefone: contato?.telefone1 ?? contato?.telefone2 ?? '',
+            cidade: endereco?.cidade ?? '',
+            uf: endereco?.estado ?? '',
+            ativo: Number(item.status ?? 0) === 0,
+          } satisfies SacadoRow;
+        }),
+      );
       setTotalItems(paged.totalItems);
       setTotalPages(paged.totalPages);
     } catch (error) {
@@ -94,7 +120,7 @@ export const SacadosPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/sacados/${row.id}`);
+      await http.delete(`/api/sacado/remove/${row.id}`);
       toast.success('Sacado removido.');
       await load();
     } catch (error) {
@@ -113,18 +139,9 @@ export const SacadosPage = () => {
 
     setCreating(true);
     try {
-      const response = await http.post('/cadastros/sacados/auto-cadastro', { documento });
-      const data = response.data as AutoCreateResult;
-      const id = data.sacadoId ?? data.SacadoId;
-      if (!id) {
-        toast.error('Não foi possível criar o sacado.');
-        return;
-      }
-
       setDocumentModalOpen(false);
       setDocumentValue('');
-      toast.success(data.mensagem ?? data.Mensagem ?? 'Sacado criado com sucesso.');
-      navigate(`/cadastro/sacados/${id}`);
+      navigate(`/cadastro/sacados/novo?documento=${documento}`);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {

@@ -1,5 +1,7 @@
 import { CadastroCrudPage } from './CadastroCrudPage';
 import type { Column } from '../../shared/ui/DataTable';
+import { DataTable } from '../../shared/ui/DataTable';
+import { PageFrame } from '../../shared/ui/PageFrame';
 import { getErrorMessage, http } from '../../shared/api/http';
 import { sanitizeDocument } from './cadastroCommon';
 import toast from 'react-hot-toast';
@@ -12,6 +14,14 @@ const tiposPessoa = new Set([
   'Registradora',
   'Credenciadora',
 ]);
+
+const staticIndiceDebentureRows = [
+  { id: '1', codigo: '1', nome: 'CDI' },
+  { id: '2', codigo: '2', nome: 'FIXO' },
+  { id: '3', codigo: '3', nome: 'IPCA' },
+  { id: '4', codigo: '4', nome: 'HÍBRIDO (FIXO + CDI)' },
+  { id: '5', codigo: '5', nome: 'DESÁGIO' },
+];
 
 const makeBasicoPage = (title: string, subtitle: string, endpoint: string, tipo: string) => {
   const columns: Column<Record<string, unknown>>[] = [
@@ -133,10 +143,11 @@ export const EmitentesPage = () => (
 export const EmpresasPage = () => (
   <BasicoEntityListPage
     title="Cadastro de Empresas"
-    subtitle="Cadastro em tela cheia com abas e auto-cadastro por documento."
-    endpoint="/cadastros/empresas"
+    subtitle="Cadastro em tela cheia com abas, alinhado ao contrato legado de FIDC."
+    api={basicoEntityApis.fidc}
     routeBase="/cadastro/empresas"
     createLabel="Nova empresa"
+    allowAutoCadastro={false}
   />
 );
 
@@ -160,13 +171,125 @@ export const InvestidoresPage = () => (
   />
 );
 
-export const CertificadorasPage = () => makeBasicoPage('Certificadoras', 'Cadastro de certificadoras.', '/cadastros/certificadoras', 'Certificadora');
+export const CertificadorasPage = () => (
+  <CadastroCrudPage
+    title="Certificadoras"
+    subtitle="Cadastro de certificadoras com contrato legado."
+    endpoint=""
+    columns={[
+      { key: 'nome', label: 'Nome' },
+      { key: 'documento', label: 'Documento' },
+      { key: 'url', label: 'URL' },
+      { key: 'ativo', label: 'Ativo' },
+      { key: 'createdAt', label: 'Cadastro' },
+    ]}
+    fields={[
+      { name: 'nome', label: 'Nome' },
+      { name: 'documento', label: 'CPF/CNPJ', mask: 'cpfCnpj', required: false },
+      { name: 'url', label: 'URL', required: false },
+    ]}
+    defaultValues={{ nome: '', documento: '', url: '', ativo: true }}
+    apiMapper={{
+      api: basicoEntityApis.certificadora,
+      mapListItem: (item) => ({
+        id: String(item.id ?? ''),
+        nome: String(item.nome ?? ''),
+        documento: String(item.cnpjCpf ?? ''),
+        url: String(item.url ?? ''),
+        ativo: Number(item.status ?? 0) === 0,
+        createdAt: item.dateCreated as string | undefined,
+      }),
+      mapUniqueItem: (item) => ({
+        id: String(item.id ?? ''),
+        nome: String(item.nome ?? ''),
+        documento: String(item.cnpjCpf ?? ''),
+        url: String(item.url ?? ''),
+        ativo: Number(item.status ?? 0) === 0,
+      }),
+      buildCreatePayload: (form) => ({
+        nome: String(form.nome ?? '').trim().toUpperCase(),
+        observacoes: null,
+        status: form.ativo === false ? 1 : 0,
+        url: String(form.url ?? '').trim() || null,
+        cnpjCpf: sanitizeDocument(String(form.documento ?? '')) || null,
+      }),
+      buildUpdatePayload: (id, form) => ({
+        id,
+        nome: String(form.nome ?? '').trim().toUpperCase(),
+        observacoes: null,
+        status: form.ativo === false ? 1 : 0,
+        url: String(form.url ?? '').trim() || null,
+        cnpjCpf: sanitizeDocument(String(form.documento ?? '')) || null,
+      }),
+    }}
+  />
+);
 export const RegistradorasPage = () => makeBasicoPage('Registradoras', 'Cadastro de registradoras.', '/cadastros/registradoras', 'Registradora');
 export const CredenciadorasPage = () => makeBasicoPage('Credenciadoras', 'Cadastro de credenciadoras.', '/cadastros/credenciadoras', 'Credenciadora');
 export const ProdutosPage = () => makeBasicoPage('Produtos', 'Cadastro de produtos.', '/cadastros/basicos/Produto', 'Produto');
 export const WhiteListPage = () => makeBasicoPage('WhiteList', 'Cadastro de whitelist.', '/cadastros/basicos/WhiteList', 'WhiteList');
 export const BlackListPage = () => makeBasicoPage('Blacklist', 'Cadastro de blacklist.', '/cadastros/basicos/BlackList', 'BlackList');
 export const DespesasPage = () => makeBasicoPage('Despesas', 'Cadastro de despesas.', '/cadastros/basicos/Despesa', 'Despesa');
-export const GrupoEconomicoPage = () => makeBasicoPage('Grupo Econômico', 'Cadastro de grupos econômicos.', '/cadastros/basicos/GrupoEconomico', 'GrupoEconomico');
+export const GrupoEconomicoPage = () => (
+  <CadastroCrudPage
+    title="Grupo Econômico"
+    subtitle="Cadastro de grupos econômicos com contrato legado."
+    endpoint=""
+    columns={[
+      { key: 'nome', label: 'Nome' },
+      { key: 'limiteTotal', label: 'Limite Total' },
+      { key: 'ativo', label: 'Ativo' },
+      { key: 'createdAt', label: 'Cadastro' },
+    ]}
+    fields={[
+      { name: 'nome', label: 'Nome' },
+      { name: 'limiteTotal', label: 'Limite Total', required: false },
+      { name: 'observacao', label: 'Observação', required: false },
+    ]}
+    defaultValues={{ nome: '', limiteTotal: '', observacao: '', ativo: true }}
+    apiMapper={{
+      api: basicoEntityApis.grupoEconomico,
+      mapListItem: (item) => ({
+        id: String(item.id ?? ''),
+        nome: String(item.nome ?? ''),
+        limiteTotal: Number(item.limite ?? item.limiteTotal ?? 0),
+        ativo: Boolean(item.isActive ?? false),
+        createdAt: item.dateCreated as string | undefined,
+      }),
+      mapUniqueItem: (item) => ({
+        id: String(item.id ?? ''),
+        nome: String(item.nome ?? ''),
+        limiteTotal: String(item.limite ?? item.limiteTotal ?? ''),
+        observacao: String(item.observacao ?? ''),
+        ativo: Boolean(item.isActive ?? false),
+      }),
+      buildCreatePayload: (form) => ({
+        nome: String(form.nome ?? '').trim(),
+        observacao: String(form.observacao ?? '').trim() || null,
+        limiteTotal: form.limiteTotal === '' ? null : Number(form.limiteTotal),
+      }),
+      buildUpdatePayload: (id, form) => ({
+        id,
+        nome: String(form.nome ?? '').trim(),
+        observacao: String(form.observacao ?? '').trim() || null,
+        limiteTotal: form.limiteTotal === '' ? null : Number(form.limiteTotal),
+      }),
+    }}
+  />
+);
 export const EsteiraCreditoPage = () => makeBasicoPage('Esteira de Crédito', 'Configuração da esteira de crédito.', '/cadastros/basicos/EsteiraCredito', 'EsteiraCredito');
-export const IndicesDebenturePage = () => makeBasicoPage('Índices Debênture', 'Cadastro de índices.', '/cadastros/basicos/IndiceDebenture', 'IndiceDebenture');
+export const IndicesDebenturePage = () => (
+  <PageFrame
+    title="Índices Debênture"
+    subtitle="Fonte estática local, como no legado."
+  >
+    <DataTable
+      columns={[
+        { key: 'codigo', label: 'Código' },
+        { key: 'nome', label: 'Índice' },
+      ]}
+      rows={staticIndiceDebentureRows}
+      loading={false}
+    />
+  </PageFrame>
+);

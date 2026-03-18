@@ -125,7 +125,7 @@ export const BasicoEntityListPage = ({
   };
   useEffect(() => {
     void load();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pagesLabel = useMemo(() => `${page} de ${totalPages}`, [page, totalPages]);
 

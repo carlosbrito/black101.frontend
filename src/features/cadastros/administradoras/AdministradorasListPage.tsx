@@ -19,6 +19,21 @@ type AdministradoraRow = {
   ativo: boolean;
 };
 
+type AdministradoraApiRow = {
+  id: string;
+  status?: number;
+  dateCreated?: string;
+  pessoa?: {
+    id?: string;
+    nome?: string;
+    cnpjCpf?: string;
+    enderecos?: Array<{
+      cidade?: string | null;
+      estado?: string | null;
+    }>;
+  };
+};
+
 const columns: Column<AdministradoraRow>[] = [
   { key: 'nome', label: 'Nome' },
   { key: 'cnpjCpf', label: 'CPF/CNPJ', render: (row) => formatCpfCnpj(row.cnpjCpf) },
@@ -52,16 +67,26 @@ export const AdministradorasPage = () => {
     setLoading(true);
 
     try {
-      const response = await http.get('/cadastros/administradoras', {
+      const response = await http.get('/api/administradora/get/list', {
         params: {
           page,
           pageSize,
-          search: search || undefined,
+          keyword: search || undefined,
         },
       });
 
-      const paged = readPagedResponse<AdministradoraRow>(response.data);
-      setRows(paged.items);
+      const paged = readPagedResponse<AdministradoraApiRow>(response.data);
+      setRows(
+        paged.items.map((item) => ({
+          id: item.id,
+          pessoaId: item.pessoa?.id ?? '',
+          nome: item.pessoa?.nome ?? '',
+          cnpjCpf: item.pessoa?.cnpjCpf ?? '',
+          cidade: item.pessoa?.enderecos?.[0]?.cidade ?? '',
+          uf: item.pessoa?.enderecos?.[0]?.estado ?? '',
+          ativo: Number(item.status ?? 0) === 0,
+        })),
+      );
       setTotalItems(paged.totalItems);
       setTotalPages(paged.totalPages);
     } catch (error) {
@@ -82,7 +107,7 @@ export const AdministradorasPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/administradoras/${row.id}`);
+      await http.delete(`/api/administradora/remove/${row.id}`);
       toast.success('Administradora removida.');
       await load();
     } catch (error) {
@@ -100,20 +125,9 @@ export const AdministradorasPage = () => {
 
     setCreating(true);
     try {
-      const response = await http.post('/cadastros/administradoras/auto-cadastro', { documento: doc });
-      const data = response.data as Record<string, unknown>;
-      const id = String(data.id ?? data.Id ?? '');
-      if (!id) {
-        toast.error('Não foi possível criar a administradora.');
-        return;
-      }
-
-      const message = String(data.mensagem ?? data.Mensagem ?? '');
-      if (message) toast.success(message);
       setDocumentModalOpen(false);
       setDocumento('');
-      await load();
-      navigate(`/cadastro/administradoras/${id}`);
+      navigate(`/cadastro/administradoras/novo?documento=${doc}`);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {

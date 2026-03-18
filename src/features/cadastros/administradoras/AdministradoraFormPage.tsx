@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage, http } from '../../../shared/api/http';
 import { PageFrame } from '../../../shared/ui/PageFrame';
@@ -104,6 +104,7 @@ const createInitialComplemento = (): ComplementoDto => ({
 
 export const AdministradoraFormPage = () => {
   const params = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const administradoraId = params.id;
   const isEdit = !!administradoraId;
@@ -218,6 +219,22 @@ export const AdministradoraFormPage = () => {
   useEffect(() => {
     const bootstrap = async () => {
       if (!administradoraId) {
+        const documento = sanitizeDocument(searchParams.get('documento') ?? '');
+        if (documento) {
+          try {
+            const pessoaResponse = await http.get(`/api/pessoa/get/cnpjcpf/${documento}`, {
+              params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
+            });
+            const pessoa = pessoaResponse.data as PessoaDto;
+            if (pessoa?.id && pessoa.id !== '00000000-0000-0000-0000-000000000000') {
+              syncPessoaForm(pessoa);
+            } else {
+              setPessoaForm((current) => ({ ...current, cnpjCpf: applyCpfCnpjMask(documento) }));
+            }
+          } catch (error) {
+            toast.error(getErrorMessage(error));
+          }
+        }
         setLoading(false);
         setComplemento(createInitialComplemento());
         return;
@@ -242,7 +259,7 @@ export const AdministradoraFormPage = () => {
     };
 
     void bootstrap();
-  }, [administradoraId]);
+  }, [administradoraId, searchParams]);
 
   const ensureValidPessoaForm = (): boolean => {
     const document = sanitizeDocument(pessoaForm.cnpjCpf);
