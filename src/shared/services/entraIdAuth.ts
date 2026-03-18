@@ -1,5 +1,11 @@
 import { PublicClientApplication, type AuthenticationResult, type PopupRequest } from '@azure/msal-browser';
 
+declare global {
+  interface Window {
+    __BLACK101_ENTRA_LOGIN_POPUP__?: () => Promise<Partial<AuthenticationResult> & { idToken?: string }>;
+  }
+}
+
 type EntraIdConfig = {
   instance: string;
   tenantId: string;
@@ -41,6 +47,10 @@ class EntraIdAuthService {
   }
 
   async loginPopup(): Promise<AuthenticationResult> {
+    if (typeof window !== 'undefined' && typeof window.__BLACK101_ENTRA_LOGIN_POPUP__ === 'function') {
+      return window.__BLACK101_ENTRA_LOGIN_POPUP__() as Promise<AuthenticationResult>;
+    }
+
     const client = await this.ensureClient();
     const config = getConfig();
     const request: PopupRequest = {

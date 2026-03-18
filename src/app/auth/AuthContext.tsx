@@ -329,7 +329,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return {
           status: 'two_factor_required',
           challenge: {
-            email: '',
+            email: result.account?.username ?? '',
             qrCode: loginModel.qrCode ?? '',
             requiresTwoFactorSetup: !!loginModel.requiresTwoFactorSetup,
           },
