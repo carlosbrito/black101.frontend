@@ -24,7 +24,7 @@ npm run e2e
 
 ```bash
 # .env.local
-VITE_API_BASE_URL=https://api-dev.black101.com.br/api
+VITE_API_BASE_URL=https://api-dev.black101.com.br
 VITE_AUTH_BASE_PATH=/auth
 VITE_LEGACY_AUTH_BASE_PATH=/api/authentication
 VITE_CSRF_ENDPOINT=/auth/csrf
