@@ -34,6 +34,14 @@
   --radius-lg: 24px;
 
   --topbar-height: 76px;
+  --login-bg: #010f2c;
+  --login-gradient: radial-gradient(110% 110% at 0% 0%, rgba(18, 40, 94, 0.7), rgba(1, 15, 44, 0.98), #010f2c);
+  --login-button-gradient-start: #6a99ff;
+  --login-button-gradient-end: #2c6ef1;
+  --login-card-blur: blur(18px);
+  --login-shadow: 0 35px 60px rgba(2, 10, 40, 0.55);
+  --login-card-bg: rgba(255, 255, 255, 0.85);
+  --login-card-border: rgba(255, 255, 255, 0.3);
 }
 
 * {

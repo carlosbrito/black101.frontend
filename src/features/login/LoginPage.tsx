@@ -21,6 +21,21 @@ const DEFAULT_EMAIL = 'admin@black101.local';
 const DEFAULT_PASSWORD = 'Master@5859';
 const EMAIL_METHOD: LegacyEmailTwoFactorType = 3;
 
+const trustHighlights = [
+  {
+    title: 'Autenticação blindada',
+    description: '2FA por QR + código por e-mail com regeneração imediata do autenticador.',
+  },
+  {
+    title: 'Monitoramento contínuo',
+    description: 'Timers visuais e alertas com `aria-live` que mantêm você informado.',
+  },
+  {
+    title: 'Design premium',
+    description: 'Gradiente profundo + glassmorphism suave reforçam a confiança no acesso.',
+  },
+];
+
 const getMethodTitle = (type: AvailableTwoFactorMethod) => {
   if (type === 1) return 'Black101 Authenticator';
   if (type === 2) return 'Google Authenticator';
@@ -336,123 +351,154 @@ export const LoginPage = () => {
 
   return (
     <main className="login-shell">
-      <section className="login-brand-panel" aria-hidden="true">
-        <div className="login-brand-mark">
-          <img className="login-brand-logo" src="/black101-logo.png" alt="Black101" />
-        </div>
-        <div className="login-brand-copy">
-          <h2>Portal FIDC</h2>
-          <p>Segurança, performance e UX fluida para o novo Black101.</p>
-        </div>
-      </section>
+      <div className="login-grid login-hero">
+        <section className="login-card">
+          <div className="login-card__header">
+            <div className="login-card__logo-row">
+              <img src="/black101-logo.png" alt="Black101" className="login-card__logo" />
+              <div>
+                <h1>Acesse sua conta</h1>
+                <p>Autenticação moderna e legado com 2FA, captcha e Microsoft Entra.</p>
+              </div>
+            </div>
+          </div>
 
-      <section className="login-card">
-        <h1>Acesse sua conta</h1>
-        <p>Autenticação moderna e legado com 2FA, captcha e Microsoft Entra.</p>
-
-        {step === 'credentials' ? (
-          <LoginCredentialsForm
-            email={email}
-            password={password}
-            rememberMe={rememberMe}
-            loading={loading}
-            hasMicrosoftSso={hasMicrosoftSso}
-            captchaToken={captchaToken}
-            captchaError={captchaError}
-            onEmailChange={setEmail}
-            onPasswordChange={setPassword}
-            onRememberMeChange={setRememberMe}
-            onCaptchaResolved={(token) => {
-              setCaptchaToken(token);
-              setCaptchaError(null);
-            }}
-            onCaptchaError={(error) => {
-              setCaptchaToken(null);
-              setCaptchaError(error);
-            }}
-            onCaptchaExpired={() => {
-              setCaptchaToken(null);
-              setCaptchaError('A verificação expirou. Valide novamente.');
-            }}
-            onSubmit={onSubmitCredentials}
-            onMicrosoftLogin={() => void onSubmitMicrosoft()}
-          />
-        ) : (
-          <LoginTwoFactorFlow
-            title="Autenticação em dois fatores"
-            subtitle="Conclua a etapa adicional de segurança para acessar o portal."
-          >
-            {step === 'two_factor_setup_qr' ? (
-              <LoginTwoFactorMethodPicker
-                methods={[1, 2]}
-                loading={loading}
-                title="Escolha o autenticador para configurar o 2FA."
-                onSelect={(type) => void handleSelectMethod(type)}
-              />
+          <div className="login-card__alerts">
+            {captchaError ? (
+              <div className="login-card__alert" role="alert">
+                {captchaError}
+              </div>
             ) : null}
+          </div>
 
-            {['two_factor_qr', 'two_factor_setup_qr'].includes(step) && twoFactorQrCode ? (
-              <LoginTwoFactorQrPanel
-                qrCode={twoFactorQrCode}
-                selectedType={selectedMethod === EMAIL_METHOD ? 1 : selectedMethod}
-                expired={qrExpired}
-                countdownLabel={formatCountdown(qrExpiresInSeconds)}
-                loading={loading}
-                onReload={() => void handleGenerateQrCode(selectedMethod === EMAIL_METHOD ? 1 : selectedMethod)}
-              />
-            ) : null}
+          {step === 'credentials' ? (
+            <LoginCredentialsForm
+              email={email}
+              password={password}
+              rememberMe={rememberMe}
+              loading={loading}
+              hasMicrosoftSso={hasMicrosoftSso}
+              captchaToken={captchaToken}
+              captchaError={captchaError}
+              onEmailChange={setEmail}
+              onPasswordChange={setPassword}
+              onRememberMeChange={setRememberMe}
+              onCaptchaResolved={(token) => {
+                setCaptchaToken(token);
+                setCaptchaError(null);
+              }}
+              onCaptchaError={(error) => {
+                setCaptchaToken(null);
+                setCaptchaError(error);
+              }}
+              onCaptchaExpired={() => {
+                setCaptchaToken(null);
+                setCaptchaError('A verificação expirou. Valide novamente.');
+              }}
+              onSubmit={onSubmitCredentials}
+              onMicrosoftLogin={() => void onSubmitMicrosoft()}
+            />
+          ) : (
+            <LoginTwoFactorFlow
+              title="Autenticação em dois fatores"
+              subtitle="Conclua a etapa adicional de segurança para acessar o portal."
+            >
+              {step === 'two_factor_setup_qr' ? (
+                <LoginTwoFactorMethodPicker
+                  methods={[1, 2]}
+                  loading={loading}
+                  title="Escolha o autenticador para configurar o 2FA."
+                  onSelect={(type) => void handleSelectMethod(type)}
+                />
+              ) : null}
 
-            {(step === 'two_factor_method_selection' || step === 'two_factor_qr') ? (
-              <LoginTwoFactorMethodPicker
-                methods={availableMethods}
-                loading={loading}
-                title={twoFactorSetupRequired ? 'Você também pode alternar o método antes de validar.' : 'Escolha como deseja validar o código.'}
-                onSelect={(type) => {
-                  if (type === EMAIL_METHOD) {
-                    void handleSelectMethod(type);
-                    return;
+              {['two_factor_qr', 'two_factor_setup_qr'].includes(step) && twoFactorQrCode ? (
+                <LoginTwoFactorQrPanel
+                  qrCode={twoFactorQrCode}
+                  selectedType={selectedMethod === EMAIL_METHOD ? 1 : selectedMethod}
+                  expired={qrExpired}
+                  countdownLabel={formatCountdown(qrExpiresInSeconds)}
+                  loading={loading}
+                  onReload={() => void handleGenerateQrCode(selectedMethod === EMAIL_METHOD ? 1 : selectedMethod)}
+                />
+              ) : null}
+
+              {(step === 'two_factor_method_selection' || step === 'two_factor_qr') ? (
+                <LoginTwoFactorMethodPicker
+                  methods={availableMethods}
+                  loading={loading}
+                  title={
+                    twoFactorSetupRequired
+                      ? 'Você também pode alternar o método antes de validar.'
+                      : 'Escolha como deseja validar o código.'
                   }
+                  onSelect={(type) => {
+                    if (type === EMAIL_METHOD) {
+                      void handleSelectMethod(type);
+                      return;
+                    }
 
-                  void handleGenerateQrCode(type);
-                }}
-              />
-            ) : null}
+                    void handleGenerateQrCode(type);
+                  }}
+                />
+              ) : null}
 
-            {step === 'two_factor_code' || step === 'two_factor_qr' ? (
-              <LoginTwoFactorCodeForm
-                code={twoFactorCode}
-                loading={loading}
-                infoText={twoFactorInfoText}
-                resendLabel={
-                  selectedMethod === EMAIL_METHOD
-                    ? resendSeconds > 0
-                      ? `Reenvio disponível em ${formatCountdown(resendSeconds)}`
-                      : 'Você pode solicitar um novo código.'
-                    : emailMethodEnabled
-                      ? 'Se precisar, você pode migrar para o código por e-mail.'
-                      : 'Abra o autenticador e informe o código gerado.'
-                }
-                canResendEmail={selectedMethod === EMAIL_METHOD ? resendSeconds === 0 : emailMethodEnabled}
-                onCodeChange={setTwoFactorCode}
-                onSubmit={onSubmitTwoFactor}
-                onBack={() => (step === 'two_factor_code' ? backWithinTwoFactor() : backWithinTwoFactor())}
-                onResendEmail={() => {
-                  if (selectedMethod === EMAIL_METHOD) {
-                    void handleSelectMethod(EMAIL_METHOD);
-                    return;
+              {step === 'two_factor_code' || step === 'two_factor_qr' ? (
+                <LoginTwoFactorCodeForm
+                  code={twoFactorCode}
+                  loading={loading}
+                  infoText={twoFactorInfoText}
+                  resendLabel={
+                    selectedMethod === EMAIL_METHOD
+                      ? resendSeconds > 0
+                        ? `Reenvio disponível em ${formatCountdown(resendSeconds)}`
+                        : 'Você pode solicitar um novo código.'
+                      : emailMethodEnabled
+                        ? 'Se precisar, você pode migrar para o código por e-mail.'
+                        : 'Abra o autenticador e informe o código gerado.'
                   }
+                  canResendEmail={selectedMethod === EMAIL_METHOD ? resendSeconds === 0 : emailMethodEnabled}
+                  onCodeChange={setTwoFactorCode}
+                  onSubmit={onSubmitTwoFactor}
+                  onBack={() => (step === 'two_factor_code' ? backWithinTwoFactor() : backWithinTwoFactor())}
+                  onResendEmail={() => {
+                    if (selectedMethod === EMAIL_METHOD) {
+                      void handleSelectMethod(EMAIL_METHOD);
+                      return;
+                    }
 
-                  void handleResetAuthenticatorByEmail();
-                }}
-              />
-            ) : null}
+                    void handleResetAuthenticatorByEmail();
+                  }}
+                />
+              ) : null}
 
-            <button type="button" className="btn-link btn-link--left" onClick={backToCredentials} disabled={loading}>
-              Voltar para o login
-            </button>
-          </LoginTwoFactorFlow>
-        )}
-      </section>
+              <button type="button" className="btn-link btn-link--left" onClick={backToCredentials} disabled={loading}>
+                Voltar para o login
+              </button>
+            </LoginTwoFactorFlow>
+          )}
+        </section>
+
+        <aside className="login-aside" data-testid="login-aside">
+          <div className="login-aside__brand">
+            <h2>Portal FIDC</h2>
+            <p>Acelere seu acesso com segurança inteligente e design premium.</p>
+          </div>
+          <div className="login-aside__trust-list">
+            {trustHighlights.map((item) => (
+              <article
+                key={item.title}
+                className="trust-card"
+                data-testid="trust-card"
+                tabIndex={0}
+              >
+                <h3 className="trust-card__title">{item.title}</h3>
+                <p className="trust-card__desc">{item.description}</p>
+              </article>
+            ))}
+          </div>
+        </aside>
+      </div>
     </main>
   );
 };
