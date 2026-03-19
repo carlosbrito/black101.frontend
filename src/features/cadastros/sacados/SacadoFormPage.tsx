@@ -6,6 +6,21 @@ import { getErrorMessage, http } from '../../../shared/api/http';
 import { PageFrame } from '../../../shared/ui/PageFrame';
 import type { PagedResponse } from '../../../shared/types/paging';
 import { applyCpfCnpjMask, applyPhoneMask, formatCpfCnpj, formatDateTime, isValidCpfCnpj, isValidPhone, readPagedResponse, sanitizeDocument, type CadastroArquivoDto, type CadastroObservacaoDto, type HistoricoItemDto } from '../cadastroCommon';
+import {
+  createLegacyObservation,
+  createLegacyRepresentative,
+  getLegacyAttachmentDownloadUrl,
+  LegacyAssociationType,
+  listLegacyAttachments,
+  listLegacyHistory,
+  listLegacyObservations,
+  listLegacyRepresentatives,
+  removeLegacyAttachment,
+  removeLegacyObservation,
+  removeLegacyRepresentative,
+  updateLegacyRepresentative,
+  uploadLegacyAttachment,
+} from '../legacySubtabApi';
 import '../cadastro.css';
 import '../administradoras/entity-form.css';
 
@@ -40,6 +55,7 @@ export const SacadoFormPage = () => {
   const [loading, setLoading] = useState(isEdit);
   const [activeTab, setActiveTab] = useState<TabKey>('sacado');
   const [saving, setSaving] = useState(false);
+  const [pessoaId, setPessoaId] = useState('');
 
   const [form, setForm] = useState({ nome: '', cnpjCpf: '', email: '', telefone: '', cidade: '', uf: '', ativo: true });
   const [complemento, setComplemento] = useState<SacadoComplementoDto>({ sacadoId: '', nomeFantasia: '', classificacao: '', grupoEconomico: '', limiteTotal: null, observacoes: '' });
@@ -66,23 +82,24 @@ export const SacadoFormPage = () => {
     }
   };
 
-  const loadSubTabs = async (id: string) => {
+  const loadSubTabs = async (id: string, associationId = pessoaId) => {
     const [c1, c2, c3, c4, c5, c6] = await Promise.all([
-      http.get(`/cadastros/sacados/${id}/complemento`),
-      http.get(`/cadastros/sacados/${id}/contatos`),
-      http.get(`/cadastros/sacados/${id}/representantes`),
-      http.get(`/cadastros/sacados/${id}/anexos`),
-      http.get(`/cadastros/sacados/${id}/observacoes`),
-      http.get(`/cadastros/sacados/${id}/historico`, { params: { page: 1, pageSize: 20 } }),
+      http.get(`/api/sacado/get/unique/${id}`),
+      http.get(`/api/sacado/get/list/contatosSacado/${id}`),
+      listLegacyRepresentatives('sacado', id),
+      listLegacyAttachments(associationId, LegacyAssociationType.SACADO),
+      listLegacyObservations(associationId, LegacyAssociationType.SACADO),
+      listLegacyHistory(associationId, LegacyAssociationType.SACADO, 1, 20),
     ]);
 
-    const comp = c1.data as SacadoComplementoDto;
+    const sacado = c1.data as { sacadoComplemento?: SacadoComplementoDto | null };
+    const comp = sacado.sacadoComplemento ?? { sacadoId: id };
     setComplemento({ sacadoId: id, nomeFantasia: comp.nomeFantasia ?? '', classificacao: comp.classificacao ?? '', grupoEconomico: comp.grupoEconomico ?? '', limiteTotal: comp.limiteTotal ?? null, observacoes: comp.observacoes ?? '' });
     setContatos((c2.data as SacadoContatoDto[]) ?? []);
-    setRepresentantes((c3.data as SacadoRepresentanteDto[]) ?? []);
-    setAnexos((c4.data as CadastroArquivoDto[]) ?? []);
-    setObservacoes((c5.data as CadastroObservacaoDto[]) ?? []);
-    setHistorico(readPagedResponse<HistoricoItemDto>(c6.data));
+    setRepresentantes((c3 as SacadoRepresentanteDto[]) ?? []);
+    setAnexos((c4 as CadastroArquivoDto[]) ?? []);
+    setObservacoes((c5 as CadastroObservacaoDto[]) ?? []);
+    setHistorico(c6);
   };
 
   useEffect(() => { void loadRepresentanteOptions(); }, []);
@@ -122,10 +139,11 @@ export const SacadoFormPage = () => {
       }
       setLoading(true);
       try {
-        const r = await http.get(`/cadastros/sacados/${sacadoId}`);
-        const s = r.data as SacadoDto;
+        const r = await http.get(`/api/sacado/get/unique/${sacadoId}`);
+        const s = r.data as SacadoDto & { pessoa: { id: string; nome: string; cnpjCpf: string; contatos?: Array<{ email?: string | null; telefone1?: string | null; telefone2?: string | null }>; enderecos?: Array<{ cidade?: string | null; estado?: string | null }> } };
+        setPessoaId(s.pessoa.id);
         setForm({ nome: s.nome ?? '', cnpjCpf: applyCpfCnpjMask(s.documento ?? ''), email: s.email ?? '', telefone: applyPhoneMask(s.telefone ?? ''), cidade: s.cidade ?? '', uf: s.uf ?? '', ativo: s.ativo });
-        await loadSubTabs(sacadoId);
+        await loadSubTabs(sacadoId, s.pessoa.id);
       } catch (e) {
         toast.error(getErrorMessage(e));
       } finally {
@@ -133,7 +151,7 @@ export const SacadoFormPage = () => {
       }
     };
     void boot();
-  }, [sacadoId, searchParams]);
+  }, [sacadoId, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveSacado = async (event: FormEvent) => {
     event.preventDefault();
@@ -143,21 +161,44 @@ export const SacadoFormPage = () => {
 
     setSaving(true);
     try {
-      const payload = {
+      const document = sanitizeDocument(form.cnpjCpf);
+      const pessoaResponse = await http.get(`/api/pessoa/get/cnpjcpf/${document}`, {
+        params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
+      });
+      const pessoa = pessoaResponse.data as { id?: string } | null;
+      const pessoaPayload = {
         nome: form.nome.trim(),
-        documento: sanitizeDocument(form.cnpjCpf),
-        email: form.email.trim() || null,
-        telefone: sanitizeDocument(form.telefone) || null,
+        cnpjCpf: document,
         cidade: form.cidade.trim() || null,
         uf: form.uf.trim() || null,
-        ativo: form.ativo,
+        contatos: [{
+          nome: form.nome.trim(),
+          email: form.email.trim() || null,
+          telefone1: sanitizeDocument(form.telefone) || null,
+          telefone2: null,
+        }],
       };
 
       if (sacadoId) {
-        await http.put(`/cadastros/sacados/${sacadoId}`, payload);
+        await http.put('/api/pessoa/update', { id: pessoa?.id, ...pessoaPayload, abaContatos: true });
         toast.success('Sacado atualizado.');
       } else {
-        const r = await http.post('/cadastros/sacados', payload);
+        let resolvedPessoaId = pessoa?.id ?? '';
+        if (!resolvedPessoaId || resolvedPessoaId === '00000000-0000-0000-0000-000000000000') {
+          const createdPessoa = await http.post('/api/pessoa/register', pessoaPayload);
+          resolvedPessoaId = String((createdPessoa.data as { id?: string }).id ?? '');
+        }
+        const r = await http.post('/api/sacado/register', {
+          pessoaId: resolvedPessoaId,
+          contatoAdicional: {
+            tipoContato: 0,
+            nome: form.nome.trim(),
+            email: form.email.trim() || 'e-email@e-email.com',
+            telefone1: sanitizeDocument(form.telefone) || '(00)0000-0000',
+            telefone2: null,
+            observacoes: '',
+          },
+        });
         const created = r.data as { id: string };
         toast.success('Sacado criado.');
         navigate(`/cadastro/sacados/${created.id}`, { replace: true });
@@ -172,12 +213,18 @@ export const SacadoFormPage = () => {
   const saveComplemento = async () => {
     if (!sacadoId) return;
     try {
-      await http.put(`/cadastros/sacados/${sacadoId}/complemento`, {
+      await http.put('/api/sacado/complemento', {
+        id: sacadoId,
+        contaCobrancaPadraoId: null,
+        meioRecebimentoPadrao: null,
+        enviaCartaCobranca: null,
+        enviaCartaCessaoCredito: null,
+        enviaCartaConfirmacao: null,
         nomeFantasia: complemento.nomeFantasia?.trim() || null,
         classificacao: complemento.classificacao?.trim() || null,
         grupoEconomico: complemento.grupoEconomico?.trim() || null,
-        limiteTotal: typeof complemento.limiteTotal === 'number' ? complemento.limiteTotal : null,
-        observacoes: complemento.observacoes?.trim() || null,
+        limiteTotalSacado: typeof complemento.limiteTotal === 'number' ? complemento.limiteTotal : null,
+        entePublico: null,
       });
       toast.success('Complemento salvo.');
       await loadSubTabs(sacadoId);
@@ -190,9 +237,21 @@ export const SacadoFormPage = () => {
     if (!contatoForm.email.trim()) return void toast.error('Informe o e-mail do contato.');
     if (!isValidPhone(contatoForm.telefone1)) return void toast.error('Telefone 1 inválido.');
 
-    const payload = { tipoContato: contatoForm.tipoContato.trim() || 'Comercial', nome: contatoForm.nome.trim(), email: contatoForm.email.trim(), telefone1: sanitizeDocument(contatoForm.telefone1), telefone2: sanitizeDocument(contatoForm.telefone2) || null };
+    const payload = {
+      Id: sacadoId,
+      ContatosAdicionais: [{
+        nome: contatoForm.nome.trim(),
+        email: contatoForm.email.trim(),
+        telefone1: sanitizeDocument(contatoForm.telefone1),
+        telefone2: sanitizeDocument(contatoForm.telefone2) || null,
+        observacoes: null,
+        tipoRelacao: 1,
+        tipoContato: Number(contatoForm.tipoContato || 0),
+        dateCreated: new Date().toISOString(),
+      }],
+    };
     try {
-      if (contatoForm.id) await http.put(`/cadastros/sacados/${sacadoId}/contatos/${contatoForm.id}`, payload); else await http.post(`/cadastros/sacados/${sacadoId}/contatos`, payload);
+      await http.put('/api/sacado/contatos', payload);
       setContatoForm({ id: '', tipoContato: '', nome: '', email: '', telefone1: '', telefone2: '' });
       await loadSubTabs(sacadoId);
     } catch (e) { toast.error(getErrorMessage(e)); }
@@ -204,9 +263,20 @@ export const SacadoFormPage = () => {
 
     try {
       if (representanteForm.id) {
-        await http.put(`/cadastros/sacados/${sacadoId}/representantes/${representanteForm.id}`, { funcao: representanteForm.funcao.trim() || null, ativo: representanteForm.ativo });
+        await updateLegacyRepresentative('sacado', {
+          id: representanteForm.id,
+          sacadoId,
+          representanteId: representanteForm.representanteId,
+          representanteAssociacaoFuncaos: [{ Funcao: representanteForm.funcao.trim() ? Number(representanteForm.funcao) || 4 : 4 }],
+          representanteEmail: '',
+        });
       } else {
-        await http.post(`/cadastros/sacados/${sacadoId}/representantes`, { representanteId: representanteForm.representanteId, funcao: representanteForm.funcao.trim() || null });
+        await createLegacyRepresentative('sacado', {
+          sacadoId,
+          representanteId: representanteForm.representanteId,
+          representanteAssociacaoFuncaos: [{ Funcao: representanteForm.funcao.trim() ? Number(representanteForm.funcao) || 4 : 4 }],
+          representanteEmail: '',
+        });
       }
       setRepresentanteForm({ id: '', representanteId: '', funcao: '', ativo: true });
       await loadSubTabs(sacadoId);
@@ -214,28 +284,31 @@ export const SacadoFormPage = () => {
   };
 
   const uploadAnexo = async () => {
-    if (!sacadoId || !anexoFile) return void toast.error('Selecione um arquivo.');
+    if (!sacadoId || !anexoFile || !pessoaId) return void toast.error('Selecione um arquivo.');
     try {
-      const fd = new FormData();
-      fd.append('file', anexoFile);
-      await http.post(`/cadastros/sacados/${sacadoId}/anexos`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await uploadLegacyAttachment(pessoaId, LegacyAssociationType.SACADO, anexoFile);
       setAnexoFile(null);
       await loadSubTabs(sacadoId);
     } catch (e) { toast.error(getErrorMessage(e)); }
   };
 
   const addObservacao = async () => {
-    if (!sacadoId || !observacaoTexto.trim()) return;
+    if (!sacadoId || !pessoaId || !observacaoTexto.trim()) return;
     try {
-      await http.post(`/cadastros/sacados/${sacadoId}/observacoes`, { texto: observacaoTexto.trim() });
+      await createLegacyObservation({
+        associationId: pessoaId,
+        associacao: LegacyAssociationType.SACADO,
+        titulo: 'Observação',
+        observacao: observacaoTexto.trim(),
+      });
       setObservacaoTexto('');
       await loadSubTabs(sacadoId);
     } catch (e) { toast.error(getErrorMessage(e)); }
   };
 
-  const removeItem = async (url: string, msg: string) => {
+  const removeItem = async (action: () => Promise<void>, msg: string) => {
     if (!window.confirm(msg)) return;
-    try { await http.delete(url); if (sacadoId) await loadSubTabs(sacadoId); } catch (e) { toast.error(getErrorMessage(e)); }
+    try { await action(); if (sacadoId) await loadSubTabs(sacadoId); } catch (e) { toast.error(getErrorMessage(e)); }
   };
 
   if (loading) return <PageFrame title="Cadastro de Sacado" subtitle="Carregando dados..."><div className="entity-loading">Carregando...</div></PageFrame>;
@@ -280,20 +353,20 @@ export const SacadoFormPage = () => {
         <label><span>Telefone 1</span><input value={contatoForm.telefone1} onChange={(e) => setContatoForm((p) => ({ ...p, telefone1: applyPhoneMask(e.target.value) }))} /></label>
         <label><span>Telefone 2</span><input value={contatoForm.telefone2} onChange={(e) => setContatoForm((p) => ({ ...p, telefone2: applyPhoneMask(e.target.value) }))} /></label>
       </div><div className="entity-actions"><button type="button" className="btn-main" onClick={() => void saveContato()}>{contatoForm.id ? 'Salvar contato' : 'Adicionar contato'}</button></div></section>
-      <section className="entity-table-wrap"><table><thead><tr><th>Tipo</th><th>Nome</th><th>E-mail</th><th>Telefone 1</th><th>Telefone 2</th><th className="col-actions">Ações</th></tr></thead><tbody>{contatos.map((x) => <tr key={x.id}><td>{x.tipoContato || '-'}</td><td>{x.nome}</td><td>{x.email}</td><td>{applyPhoneMask(x.telefone1)}</td><td>{x.telefone2 ? applyPhoneMask(x.telefone2) : '-'}</td><td className="col-actions"><div className="table-actions"><button type="button" onClick={() => setContatoForm({ id: x.id, tipoContato: x.tipoContato ?? '', nome: x.nome, email: x.email, telefone1: applyPhoneMask(x.telefone1), telefone2: applyPhoneMask(x.telefone2 ?? '') })}>Editar</button><button type="button" className="danger" onClick={() => void removeItem(`/cadastros/sacados/${sacadoId}/contatos/${x.id}`, 'Remover contato?')}>Remover</button></div></td></tr>)}{contatos.length === 0 && <tr><td colSpan={6}>Nenhum contato cadastrado.</td></tr>}</tbody></table></section></section>}
+      <section className="entity-table-wrap"><table><thead><tr><th>Tipo</th><th>Nome</th><th>E-mail</th><th>Telefone 1</th><th>Telefone 2</th><th className="col-actions">Ações</th></tr></thead><tbody>{contatos.map((x) => <tr key={x.id}><td>{x.tipoContato || '-'}</td><td>{x.nome}</td><td>{x.email}</td><td>{applyPhoneMask(x.telefone1)}</td><td>{x.telefone2 ? applyPhoneMask(x.telefone2) : '-'}</td><td className="col-actions"><div className="table-actions"><button type="button" onClick={() => setContatoForm({ id: x.id, tipoContato: x.tipoContato ?? '', nome: x.nome, email: x.email, telefone1: applyPhoneMask(x.telefone1), telefone2: applyPhoneMask(x.telefone2 ?? '') })}>Editar</button><button type="button" className="danger" onClick={() => void removeItem(() => http.put('/api/sacado/contatos', { Id: sacadoId, ContatosAdicionais: contatos.filter((item) => item.id !== x.id).map((item) => ({ nome: item.nome, email: item.email, telefone1: item.telefone1, telefone2: item.telefone2 ?? null, observacoes: null, tipoRelacao: 1, tipoContato: Number(item.tipoContato || 0), dateCreated: new Date().toISOString() })) }), 'Remover contato?')}>Remover</button></div></td></tr>)}{contatos.length === 0 && <tr><td colSpan={6}>Nenhum contato cadastrado.</td></tr>}</tbody></table></section></section>}
 
       {activeTab === 'representantes' && <section className="entity-form-stack"><section className="entity-card"><div className="entity-grid cols-3">
         <label><span>Representante</span><select value={representanteForm.representanteId} disabled={!!representanteForm.id} onChange={(e) => setRepresentanteForm((p) => ({ ...p, representanteId: e.target.value }))}><option value="">Selecione</option>{representanteOptions.map((x) => <option key={x.id} value={x.id}>{x.nome} ({formatCpfCnpj(x.cnpjCpf)})</option>)}</select></label>
         <label><span>Função</span><input value={representanteForm.funcao} onChange={(e) => setRepresentanteForm((p) => ({ ...p, funcao: e.target.value }))} /></label>
         <label className="checkbox-inline"><input type="checkbox" checked={representanteForm.ativo} disabled={!representanteForm.id} onChange={(e) => setRepresentanteForm((p) => ({ ...p, ativo: e.target.checked }))} /><span>Vínculo ativo</span></label>
       </div><div className="entity-actions"><button type="button" className="btn-main" onClick={() => void saveRepresentante()}>{representanteForm.id ? 'Salvar vínculo' : 'Vincular representante'}</button></div></section>
-      <section className="entity-table-wrap"><table><thead><tr><th>Representante</th><th>Documento</th><th>Função</th><th>Status</th><th className="col-actions">Ações</th></tr></thead><tbody>{representantes.map((x) => <tr key={x.id}><td>{x.nomeRepresentante}</td><td>{formatCpfCnpj(x.documentoRepresentante)}</td><td>{x.funcao ?? '-'}</td><td>{x.ativo ? 'Ativo' : 'Inativo'}</td><td className="col-actions"><div className="table-actions"><button type="button" onClick={() => setRepresentanteForm({ id: x.id, representanteId: x.representanteId, funcao: x.funcao ?? '', ativo: x.ativo })}>Editar</button><button type="button" className="danger" onClick={() => void removeItem(`/cadastros/sacados/${sacadoId}/representantes/${x.id}`, 'Remover vínculo?')}>Remover</button></div></td></tr>)}{representantes.length === 0 && <tr><td colSpan={5}>Nenhum representante vinculado.</td></tr>}</tbody></table></section></section>}
+      <section className="entity-table-wrap"><table><thead><tr><th>Representante</th><th>Documento</th><th>Função</th><th>Status</th><th className="col-actions">Ações</th></tr></thead><tbody>{representantes.map((x) => <tr key={x.id}><td>{x.nomeRepresentante}</td><td>{formatCpfCnpj(x.documentoRepresentante)}</td><td>{x.funcao ?? '-'}</td><td>{x.ativo ? 'Ativo' : 'Inativo'}</td><td className="col-actions"><div className="table-actions"><button type="button" onClick={() => setRepresentanteForm({ id: x.id, representanteId: x.representanteId, funcao: x.funcao ?? '', ativo: x.ativo })}>Editar</button><button type="button" className="danger" onClick={() => void removeItem(() => removeLegacyRepresentative('sacado', x.id), 'Remover vínculo?')}>Remover</button></div></td></tr>)}{representantes.length === 0 && <tr><td colSpan={5}>Nenhum representante vinculado.</td></tr>}</tbody></table></section></section>}
 
       {activeTab === 'anexos' && <section className="entity-form-stack"><section className="entity-card"><div className="entity-grid cols-2"><label><span>Arquivo</span><input type="file" onChange={(e) => setAnexoFile(e.target.files?.[0] ?? null)} /></label><div className="entity-inline-actions"><button type="button" className="btn-main" onClick={() => void uploadAnexo()}>Enviar anexo</button></div></div></section>
-      <section className="entity-table-wrap"><table><thead><tr><th>Arquivo</th><th>Tipo</th><th>Tamanho</th><th>Data</th><th className="col-actions">Ações</th></tr></thead><tbody>{anexos.map((x) => <tr key={x.id}><td>{x.nomeArquivo}</td><td>{x.contentType}</td><td>{x.tamanhoBytes}</td><td>{formatDateTime(x.createdAt)}</td><td className="col-actions"><div className="table-actions"><button type="button" className="danger" onClick={() => void removeItem(`/cadastros/sacados/${sacadoId}/anexos/${x.id}`, 'Remover anexo?')}>Remover</button></div></td></tr>)}{anexos.length === 0 && <tr><td colSpan={5}>Nenhum anexo cadastrado.</td></tr>}</tbody></table></section></section>}
+      <section className="entity-table-wrap"><table><thead><tr><th>Arquivo</th><th>Tipo</th><th>Tamanho</th><th>Data</th><th className="col-actions">Ações</th></tr></thead><tbody>{anexos.map((x) => <tr key={x.id}><td>{x.nomeArquivo}</td><td>{x.contentType}</td><td>{x.tamanhoBytes}</td><td>{formatDateTime(x.createdAt)}</td><td className="col-actions"><div className="table-actions"><button type="button" onClick={() => void getLegacyAttachmentDownloadUrl(x.id, LegacyAssociationType.SACADO).then((url) => { if (url) window.open(url, '_blank', 'noopener,noreferrer'); })}>Download</button><button type="button" className="danger" onClick={() => void removeItem(() => removeLegacyAttachment(x.id), 'Remover anexo?')}>Remover</button></div></td></tr>)}{anexos.length === 0 && <tr><td colSpan={5}>Nenhum anexo cadastrado.</td></tr>}</tbody></table></section></section>}
 
       {activeTab === 'observacoes' && <section className="entity-form-stack"><section className="entity-card"><label className="span-all"><span>Texto</span><textarea value={observacaoTexto} onChange={(e) => setObservacaoTexto(e.target.value)} /></label><div className="entity-actions"><button type="button" className="btn-main" onClick={() => void addObservacao()}>Incluir observação</button></div></section>
-      <section className="entity-table-wrap"><table><thead><tr><th>Autor</th><th>Data</th><th>Texto</th><th className="col-actions">Ações</th></tr></thead><tbody>{observacoes.map((x) => <tr key={x.id}><td>{x.autorEmail ?? '-'}</td><td>{formatDateTime(x.createdAt)}</td><td>{x.texto}</td><td className="col-actions"><div className="table-actions"><button type="button" className="danger" onClick={() => void removeItem(`/cadastros/sacados/${sacadoId}/observacoes/${x.id}`, 'Remover observação?')}>Remover</button></div></td></tr>)}{observacoes.length === 0 && <tr><td colSpan={4}>Nenhuma observação cadastrada.</td></tr>}</tbody></table></section></section>}
+      <section className="entity-table-wrap"><table><thead><tr><th>Autor</th><th>Data</th><th>Texto</th><th className="col-actions">Ações</th></tr></thead><tbody>{observacoes.map((x) => <tr key={x.id}><td>{x.autorEmail ?? '-'}</td><td>{formatDateTime(x.createdAt)}</td><td>{x.texto}</td><td className="col-actions"><div className="table-actions"><button type="button" className="danger" onClick={() => void removeItem(() => removeLegacyObservation(x.id), 'Remover observação?')}>Remover</button></div></td></tr>)}{observacoes.length === 0 && <tr><td colSpan={4}>Nenhuma observação cadastrada.</td></tr>}</tbody></table></section></section>}
 
       {activeTab === 'historico' && <section className="entity-card"><div className="entity-table-wrap"><table><thead><tr><th>Ação</th><th>Entidade</th><th>Usuário</th><th>Data</th><th>TraceId</th><th>Payload</th></tr></thead><tbody>{historico.items.map((x) => <tr key={x.id}><td>{x.acao}</td><td>{x.entidade}</td><td>{x.userEmail ?? '-'}</td><td>{formatDateTime(x.createdAt)}</td><td className="trace-id-cell">{x.traceId}</td><td>{x.payloadJson ?? '-'}</td></tr>)}{historico.items.length === 0 && <tr><td colSpan={6}>Nenhum histórico encontrado.</td></tr>}</tbody></table></div></section>}
     </PageFrame>

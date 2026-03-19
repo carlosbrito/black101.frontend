@@ -25,6 +25,22 @@ import {
   type PessoaFormState,
   readPagedResponse,
 } from '../cadastroCommon';
+import {
+  createLegacyObservation,
+  createLegacyRepresentative,
+  getLegacyAttachmentDownloadUrl,
+  LegacyAssociationType,
+  listLegacyAttachments,
+  listLegacyHistory,
+  listLegacyObservations,
+  listLegacyRepresentatives,
+  listLegacyAccounts,
+  removeLegacyAttachment,
+  removeLegacyObservation,
+  removeLegacyRepresentative,
+  updateLegacyRepresentative,
+  uploadLegacyAttachment,
+} from '../legacySubtabApi';
 import '../cadastro.css';
 import '../administradoras/entity-form.css';
 import './cedente-premium.css';
@@ -471,24 +487,6 @@ const maskDecimalInput = (value: string) => {
 };
 const maskIntegerInput = (value: string) => value.replace(/\D/g, '');
 
-const parseFileName = (header: string | null, fallbackName: string): string => {
-  if (!header) {
-    return fallbackName;
-  }
-
-  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(header);
-  if (utf8Match?.[1]) {
-    return decodeURIComponent(utf8Match[1]);
-  }
-
-  const quotedMatch = /filename="?([^";]+)"?/i.exec(header);
-  if (quotedMatch?.[1]) {
-    return quotedMatch[1];
-  }
-
-  return fallbackName;
-};
-
 const normalizeStatusToken = (value: string): string =>
   value
     .normalize('NFD')
@@ -496,6 +494,24 @@ const normalizeStatusToken = (value: string): string =>
     .trim()
     .replace(/\s+/g, '_')
     .toUpperCase();
+
+const cedenteStatusLabelMap: Record<number, string> = {
+  0: 'Aberto',
+  1: 'Aguardando Aprovação',
+  2: 'Ativo',
+  3: 'Inativo',
+};
+
+const cedenteStatusWorkflowMap: Record<string, number> = {
+  ABERTO: 0,
+  AGUARDANDO_APROVACAO: 1,
+  ATIVO: 2,
+  APROVADO: 2,
+  INATIVO: 3,
+};
+
+const toCedenteStatusLabel = (value: unknown) =>
+  typeof value === 'number' ? (cedenteStatusLabelMap[value] ?? String(value)) : String(value ?? 'Aberto');
 
 const expenseSegmentLabel = (segmento: number) => {
   switch (segmento) {
@@ -688,17 +704,28 @@ export const CedenteFormPage = () => {
     });
   };
 
-  const loadHistorico = async (id: string, page: number) => {
-    const response = await http.get(`/cadastros/cedentes/${id}/historico`, {
-      params: { page, pageSize: historicoPaged.pageSize },
-    });
+  const loadHistorico = async (_id: string, page: number) => {
+    if (!pessoaId) {
+      return;
+    }
 
-    setHistoricoPaged(readPagedResponse<HistoricoItemDto>(response.data));
+    const response = await listLegacyHistory(
+      pessoaId,
+      LegacyAssociationType.CEDENTE,
+      page,
+      historicoPaged.pageSize,
+    );
+
+    setHistoricoPaged(response);
   };
 
   const reloadSubTabs = async (id: string) => {
+    if (!pessoaId) {
+      return;
+    }
+
     const [
-      complementoRes,
+      cedenteRes,
       contatosRes,
       representantesRes,
       contasRes,
@@ -713,60 +740,77 @@ export const CedenteFormPage = () => {
       observacoesRes,
       historicoRes,
     ] = await Promise.all([
-      http.get(`/cadastros/cedentes/${id}/complemento`),
-      http.get(`/cadastros/cedentes/${id}/contatos`),
-      http.get(`/cadastros/cedentes/${id}/representantes`),
-      http.get(`/cadastros/cedentes/${id}/contas`),
-      http.get(`/cadastros/cedentes/${id}/documentos`),
-      http.get(`/cadastros/cedentes/${id}/parametrizacao`),
-      http.get(`/cadastros/cedentes/${id}/contratos`),
-      http.get(`/cadastros/cedentes/${id}/atualizacoes`),
-      http.get(`/cadastros/cedentes/${id}/despesas`),
-      http.get(`/cadastros/cedentes/${id}/juridico`),
-      http.get(`/cadastros/cedentes/${id}/pendencias`),
-      http.get(`/cadastros/cedentes/${id}/anexos`),
-      http.get(`/cadastros/cedentes/${id}/observacoes`),
-      http.get(`/cadastros/cedentes/${id}/historico`, { params: { page: 1, pageSize: 20 } }),
+      http.get(`/api/cedente/get/uniqueCedente/${id}`),
+      http.get(`/api/cedente/get/list/contatosCedente/${id}`),
+      listLegacyRepresentatives('cedente', id),
+      listLegacyAccounts(id, LegacyAssociationType.CEDENTE),
+      http.get('/api/cedente/get/documentos/all', { params: { id } }),
+      http.get(`/api/cedente/get/cedenteParametrizacao/${id}`),
+      http.get('/api/cedente/get/cedenteContrato', { params: { id } }),
+      http.get('/api/AtualizacoesCedente/get', { params: { id } }),
+      http.get('/api/cedente/get/despesa', { params: { id } }),
+      http.get('/api/juridico/get', { params: { id, associacao: LegacyAssociationType.CEDENTE } }),
+      http.get('/api/pendencia/get', { params: { id } }),
+      listLegacyAttachments(pessoaId, LegacyAssociationType.CEDENTE),
+      listLegacyObservations(pessoaId, LegacyAssociationType.CEDENTE),
+      listLegacyHistory(pessoaId, LegacyAssociationType.CEDENTE, 1, 20),
     ]);
 
-    setComplemento((complementoRes.data as ComplementoDto) ?? createInitialComplemento());
+    const cedente = cedenteRes.data as {
+      cedenteComplemento?: ComplementoDto | null;
+      cedenteParametrizacoes?: ParametrizacaoDto[] | null;
+      cedenteContratos?: ContratoDto[] | null;
+      cedenteDespesas?: DespesaDto[] | null;
+      pendencias?: PendenciaDto[] | null;
+    };
+
+    setComplemento((cedente.cedenteComplemento as ComplementoDto | null) ?? createInitialComplemento());
     setContatos((contatosRes.data as ContatoDto[]) ?? []);
-    setRepresentantes((representantesRes.data as CedenteRepresentanteDto[]) ?? []);
-    setContas((contasRes.data as ContaDto[]) ?? []);
+    setRepresentantes((representantesRes as CedenteRepresentanteDto[]) ?? []);
+    setContas((contasRes as ContaDto[]) ?? []);
     setDocumentos((documentosRes.data as DocumentoDto[]) ?? []);
-    setParametrizacoes((parametrizacaoRes.data as ParametrizacaoDto[]) ?? []);
-    setContratos((contratosRes.data as ContratoDto[]) ?? []);
+    setParametrizacoes(
+      (parametrizacaoRes.data as ParametrizacaoDto[]) ??
+        (cedente.cedenteParametrizacoes as ParametrizacaoDto[] | null) ??
+        [],
+    );
+    setContratos((contratosRes.data as ContratoDto[]) ?? (cedente.cedenteContratos as ContratoDto[] | null) ?? []);
     setAtualizacoes((atualizacoesRes.data as AtualizacaoDto[]) ?? []);
-    setDespesas((despesasRes.data as DespesaDto[]) ?? []);
+    setDespesas((despesasRes.data as DespesaDto[]) ?? (cedente.cedenteDespesas as DespesaDto[] | null) ?? []);
     setJuridicos((juridicoRes.data as JuridicoDto[]) ?? []);
-    setPendencias((pendenciasRes.data as PendenciaDto[]) ?? []);
-    setAnexos((anexosRes.data as CadastroArquivoDto[]) ?? []);
-    setObservacoes((observacoesRes.data as CadastroObservacaoDto[]) ?? []);
-    setHistoricoPaged(readPagedResponse<HistoricoItemDto>(historicoRes.data));
+    setPendencias((pendenciasRes.data as PendenciaDto[]) ?? (cedente.pendencias as PendenciaDto[] | null) ?? []);
+    setAnexos((anexosRes as CadastroArquivoDto[]) ?? []);
+    setObservacoes((observacoesRes as CadastroObservacaoDto[]) ?? []);
+    setHistoricoPaged(historicoRes as PagedResponse<HistoricoItemDto>);
   };
 
   const loadOptions = async () => {
-    const [repRes, bancoRes, modalidadesRes, despesasRes] = await Promise.all([
-      http.get('/cadastros/representantes', {
+    const [repRes, bancoRes, despesasRes, modalidadesRes] = await Promise.all([
+      http.get('/api/representante/get/list', {
         params: { page: 1, pageSize: 300, sortBy: 'nome', sortDir: 'asc' },
       }),
-      http.get('/cadastros/bancos', {
+      http.get('/api/banco/get/list', {
         params: { page: 1, pageSize: 300, sortBy: 'nome', sortDir: 'asc' },
       }),
-      http.get('/cadastros/modalidades', {
-        params: { page: 1, pageSize: 200, sortBy: 'nome', sortDir: 'asc' },
+      http.get('/api/despesa/get/list', {
+        params: { page: 1, pageSize: 300, sortBy: 'nome', sortDir: 'asc' },
       }),
-      http.get('/cadastros/despesas/lookup'),
+      cedenteId
+        ? http.get('/api/cedente/get/modalidades', { params: { cedenteId } })
+        : Promise.resolve({ data: { items: [] } }),
     ]);
 
     const repsPaged = readPagedResponse<RepresentanteOption>(repRes.data);
     const bancosPaged = readPagedResponse<{ id: string; nome: string }>(bancoRes.data);
-    const modalidadesPaged = readPagedResponse<ModalidadeOption>(modalidadesRes.data);
+    const despesasPaged = readPagedResponse<DespesaOption>(despesasRes.data);
+    const modalidadesData = Array.isArray((modalidadesRes as { data: unknown }).data)
+      ? ((modalidadesRes as { data: ModalidadeOption[] }).data ?? [])
+      : readPagedResponse<ModalidadeOption>((modalidadesRes as { data: unknown }).data).items;
 
     setRepresentanteOptions(repsPaged.items.filter((item) => item.ativo));
     setBancoOptions(bancosPaged.items.map((item) => ({ id: item.id, nome: item.nome })));
-    setModalidades(modalidadesPaged.items.filter((item) => item.ativo));
-    setDespesaOptions((despesasRes.data as DespesaOption[]) ?? []);
+    setModalidades(modalidadesData.filter((item) => item.ativo ?? true));
+    setDespesaOptions(despesasPaged.items);
   };
 
   useEffect(() => {
@@ -776,7 +820,7 @@ export const CedenteFormPage = () => {
       setModalidades([]);
       setDespesaOptions([]);
     });
-  }, []);
+  }, [cedenteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -803,16 +847,16 @@ export const CedenteFormPage = () => {
 
       setLoading(true);
       try {
-        const cedenteRes = await http.get(`/cadastros/cedentes/${cedenteId}`);
-        const cedente = cedenteRes.data as CedenteDto;
+        const cedenteRes = await http.get(`/api/cedente/get/uniqueCedente/${cedenteId}`);
+        const cedente = cedenteRes.data as CedenteDto & {
+          pessoa: PessoaDto;
+          cedenteComplemento?: ComplementoDto | null;
+        };
 
         setCedenteAtivo(cedente.ativo);
-        setCedenteStatus(cedente.status || 'Aberto');
-
-        const pessoaRes = await http.get(`/cadastros/pessoas/${cedente.pessoaId}`);
-        syncPessoaForm(pessoaRes.data as PessoaDto);
-
-        await reloadSubTabs(cedenteId);
+        setCedenteStatus(toCedenteStatusLabel(cedente.status));
+        syncPessoaForm(cedente.pessoa);
+        setComplemento((cedente.cedenteComplemento as ComplementoDto | null) ?? createInitialComplemento());
       } catch (error) {
         toast.error(getErrorMessage(error));
       } finally {
@@ -822,6 +866,14 @@ export const CedenteFormPage = () => {
 
     void bootstrap();
   }, [cedenteId, searchParams]);
+
+  useEffect(() => {
+    if (cedenteId && pessoaId) {
+      void reloadSubTabs(cedenteId).catch((error) => {
+        toast.error(getErrorMessage(error));
+      });
+    }
+  }, [cedenteId, pessoaId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!visibleTabs.some((item) => item.key === activeTab)) {
@@ -1028,28 +1080,23 @@ export const CedenteFormPage = () => {
     let resolvedPessoaId = pessoaId;
 
     if (!resolvedPessoaId) {
-      const pessoaByDocument = await http.get('/cadastros/pessoas', {
-        params: {
-          documento: document,
-        },
+      const pessoaByDocument = await http.get(`/api/pessoa/get/cnpjcpf/${document}`, {
+        params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
       });
 
       const found = pessoaByDocument.data as PessoaDto | null;
-      if (found?.id) {
+      if (found?.id && found.id !== '00000000-0000-0000-0000-000000000000') {
         resolvedPessoaId = found.id;
       }
     }
 
     if (resolvedPessoaId) {
-      await http.put(`/cadastros/pessoas/${resolvedPessoaId}`, {
-        ...payload,
-        ativo: pessoaForm.ativo,
-      });
+      await http.put('/api/pessoa/update', { id: resolvedPessoaId, ...payload });
 
       return resolvedPessoaId;
     }
 
-    const createResponse = await http.post('/cadastros/pessoas', payload);
+    const createResponse = await http.post('/api/pessoa/register', payload);
     const created = createResponse.data as { id: string };
     return created.id;
   };
@@ -1068,30 +1115,16 @@ export const CedenteFormPage = () => {
       setPessoaId(resolvedPessoaId);
 
       if (cedenteId) {
-        await http.put(`/cadastros/cedentes/${cedenteId}`, {
-          pessoaId: resolvedPessoaId,
-          ativo: cedenteAtivo,
-          status: cedenteStatus.trim() || 'Aberto',
-        });
-
         toast.success('Cedente atualizado.');
       } else {
         const createCedente = async (empresaId?: string) => {
-          const createResponse = await http.post('/cadastros/cedentes', {
+          const createResponse = await http.post('/api/cedente/register', {
             pessoaId: resolvedPessoaId,
           }, {
             headers: empresaId ? { [CONTEXTO_EMPRESA_HEADER]: empresaId } : undefined,
           });
 
           const created = createResponse.data as { id: string };
-
-          if (!cedenteAtivo || (cedenteStatus.trim() && cedenteStatus.trim() !== 'Aberto')) {
-            await http.put(`/cadastros/cedentes/${created.id}`, {
-              pessoaId: resolvedPessoaId,
-              ativo: cedenteAtivo,
-              status: cedenteStatus.trim() || 'Aberto',
-            });
-          }
 
           toast.success('Cedente criado.');
           navigate(`/cadastro/cedentes/${created.id}`, { replace: true });
@@ -1138,11 +1171,21 @@ export const CedenteFormPage = () => {
     }
 
     try {
-      await http.put(`/cadastros/cedentes/${cedenteId}`, {
-        pessoaId,
-        ativo,
-        status,
-      });
+      const normalized = normalizeStatusToken(status);
+      if (normalized === 'INATIVO') {
+        await http.put(`/api/cedente/deactivate/${cedenteId}`, null);
+      } else {
+        const formData = new FormData();
+        formData.append('id', cedenteId);
+        formData.append('observacoes', '');
+        formData.append('status', String(cedenteStatusWorkflowMap[normalized] ?? 0));
+        formData.append('enviaAssinaturaDigital', 'false');
+        formData.append('enviaEmail', 'false');
+        formData.append('enviaAdministradora', 'false');
+        await http.put('/api/cedente/workflow', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
 
       setCedenteStatus(status);
       setCedenteAtivo(ativo);
@@ -1174,12 +1217,13 @@ export const CedenteFormPage = () => {
 
   const saveComplemento = async () => {
     await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/complemento`, {
+      await http.put('/api/cedente/complemento', {
+        id: cedenteId,
         nomeFantasia: complemento.nomeFantasia?.trim() || null,
         segmento: complemento.segmento?.trim() || null,
         classificacao: complemento.classificacao?.trim() || null,
-        autoAprovacao: false,
-        desabilitarAcoesConsultorAposAtivo: false,
+        autoAprovacao: complemento.autoAprovacao,
+        desabilitarAcoesConsultorAposAtivo: complemento.desabilitarAcoesConsultorAposAtivo,
         observacoes: complemento.observacoes?.trim() || null,
       });
 
@@ -1198,13 +1242,17 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/contatos`, {
-        tipoContato: Number(contatoForm.tipoContato ?? 0),
-        nome: contatoForm.nome.trim(),
-        email: contatoForm.email.trim(),
-        telefone1: contatoForm.telefone1.trim(),
-        telefone2: contatoForm.telefone2.trim() || null,
-        observacoes: contatoForm.observacoes.trim() || null,
+      await http.put('/api/cedente/contatos', {
+        Id: cedenteId,
+        ContatosAdicionais: [{
+          tipoContato: Number(contatoForm.tipoContato ?? 0),
+          nome: contatoForm.nome.trim(),
+          email: contatoForm.email.trim(),
+          telefone1: sanitizeDocument(contatoForm.telefone1),
+          telefone2: sanitizeDocument(contatoForm.telefone2) || null,
+          observacoes: contatoForm.observacoes.trim() || null,
+          tipoRelacao: 1,
+        }],
       });
 
       setContatoForm({
@@ -1239,13 +1287,31 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/contatos/${item.id}`, {
-        tipoContato: item.tipoContato,
-        nome: nome.trim(),
-        email: email.trim(),
-        telefone1: telefone1Masked,
-        telefone2: telefone2Masked.trim() || null,
-        observacoes: observacoesItem.trim() || null,
+      const contatosAtualizados = contatos.map((contato) =>
+        contato.id === item.id
+          ? {
+              nome: nome.trim(),
+              email: email.trim(),
+              telefone1: sanitizeDocument(telefone1Masked),
+              telefone2: sanitizeDocument(telefone2Masked) || null,
+              observacoes: observacoesItem.trim() || null,
+              tipoRelacao: 1,
+              tipoContato: item.tipoContato,
+            }
+          : {
+              nome: contato.nome,
+              email: contato.email,
+              telefone1: contato.telefone1,
+              telefone2: contato.telefone2 ?? null,
+              observacoes: contato.observacoes ?? null,
+              tipoRelacao: 1,
+              tipoContato: contato.tipoContato,
+            },
+      );
+
+      await http.put('/api/cedente/contatos', {
+        Id: cedenteId,
+        ContatosAdicionais: contatosAtualizados,
       });
 
       toast.success('Contato atualizado.');
@@ -1258,7 +1324,20 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/contatos/${item.id}`);
+      await http.put('/api/cedente/contatos', {
+        Id: cedenteId,
+        ContatosAdicionais: contatos
+          .filter((contato) => contato.id !== item.id)
+          .map((contato) => ({
+            nome: contato.nome,
+            email: contato.email,
+            telefone1: contato.telefone1,
+            telefone2: contato.telefone2 ?? null,
+            observacoes: contato.observacoes ?? null,
+            tipoRelacao: 1,
+            tipoContato: contato.tipoContato,
+          })),
+      });
       toast.success('Contato removido.');
     });
   };
@@ -1270,9 +1349,10 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/representantes`, {
+      await createLegacyRepresentative('cedente', {
+        cedenteId,
         representanteId: selectedRepresentanteId,
-        funcao: funcaoRepresentante.trim() || null,
+        representanteAssociacaoFuncaos: [{ Funcao: funcaoRepresentante.trim() ? Number(funcaoRepresentante) || 4 : 4 }],
       });
 
       setSelectedRepresentanteId('');
@@ -1286,24 +1366,20 @@ export const CedenteFormPage = () => {
     if (funcao === null) return;
 
     await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/representantes/${item.id}`, {
-        funcao: funcao.trim() || null,
-        ativo: item.ativo,
+      await updateLegacyRepresentative('cedente', {
+        id: item.id,
+        cedenteId,
+        representanteId: item.representanteId,
+        representanteAssociacaoFuncaos: [{ Funcao: funcao.trim() ? Number(funcao) || 4 : 4 }],
       });
 
       toast.success('Vínculo atualizado.');
     });
   };
 
-  const toggleRepresentante = async (item: CedenteRepresentanteDto) => {
-    await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/representantes/${item.id}`, {
-        funcao: item.funcao ?? null,
-        ativo: !item.ativo,
-      });
-
-      toast.success('Status do vínculo atualizado.');
-    });
+  const toggleRepresentante = async (_item?: CedenteRepresentanteDto) => {
+    void _item;
+    toast('O legado não possui alternância direta de status para vínculo de representante. Use editar ou excluir.');
   };
 
   const removeRepresentante = async (item: CedenteRepresentanteDto) => {
@@ -1312,7 +1388,7 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/representantes/${item.id}`);
+      await removeLegacyRepresentative('cedente', item.id);
       toast.success('Vínculo removido.');
     });
   };
@@ -1324,14 +1400,15 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/contas`, {
+      await http.post('/api/conta/register', {
+        associacaoId: cedenteId,
+        associacao: LegacyAssociationType.CEDENTE,
         bancoId: contaForm.bancoId || null,
-        bancoNome: contaForm.bancoNome.trim(),
         agencia: contaForm.agencia.trim(),
         numeroConta: contaForm.numeroConta.trim(),
-        tipoConta: contaForm.tipoConta.trim() || null,
+        tipo: contaForm.tipoConta.trim() ? Number(contaForm.tipoConta) || 0 : 0,
         principal: contaForm.principal,
-        ativo: contaForm.ativo,
+        status: contaForm.ativo ? 0 : 1,
       });
 
       setContaForm({
@@ -1359,14 +1436,16 @@ export const CedenteFormPage = () => {
     if (tipoConta === null) return;
 
     await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/contas/${item.id}`, {
+      await http.put('/api/conta/update', {
+        id: item.id,
+        pessoaId: cedenteId,
+        associacao: LegacyAssociationType.CEDENTE,
         bancoId: item.bancoId ?? null,
-        bancoNome: bancoNome.trim(),
         agencia: agencia.trim(),
         numeroConta: numeroConta.trim(),
-        tipoConta: tipoConta.trim() || null,
+        tipo: tipoConta.trim() ? Number(tipoConta) || 0 : 0,
         principal: item.principal,
-        ativo: item.ativo,
+        status: item.ativo ? 0 : 1,
       });
 
       toast.success('Conta atualizada.');
@@ -1379,7 +1458,7 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/contas/${item.id}`);
+      await http.delete(`/api/conta/remove/${item.id}`);
       toast.success('Conta removida.');
     });
   };
@@ -1392,32 +1471,27 @@ export const CedenteFormPage = () => {
 
     await withCedenteReload(async () => {
       const formData = new FormData();
-      formData.append('tipoDocumento', tipoDocumento.trim() || 'Documento');
-      formData.append('file', documentoFile);
+      formData.append('id', cedenteId ?? '');
+      formData.append('tipoDocumentoCedente', tipoDocumento.trim() || '0');
+      formData.append('arquivo', documentoFile);
 
-      await http.post(`/cadastros/cedentes/${cedenteId}/documentos`, formData);
+      await http.post('/api/cedente/documento', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       setDocumentoFile(null);
       toast.success('Documento enviado.');
     });
   };
 
   const downloadDocumento = async (item: DocumentoDto) => {
-    if (!cedenteId) return;
+    if (!item.id) return;
 
     try {
-      const response = await http.get(`/cadastros/cedentes/${cedenteId}/documentos/${item.id}/download`, {
-        responseType: 'blob',
-      });
-
-      const fileName = parseFileName(response.headers['content-disposition'] ?? null, item.nomeArquivo);
-      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
-      const anchor = document.createElement('a');
-      anchor.href = blobUrl;
-      anchor.download = fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.URL.revokeObjectURL(blobUrl);
+      const url = await getLegacyAttachmentDownloadUrl(item.id, LegacyAssociationType.CEDENTE);
+      if (!url) {
+        throw new Error('Não foi possível obter a URL do documento.');
+      }
+      window.open(url, '_blank', 'noopener,noreferrer');
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -1429,7 +1503,7 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/documentos/${item.id}`);
+      await removeLegacyAttachment(item.id);
       toast.success('Documento removido.');
     });
   };
@@ -1497,10 +1571,20 @@ export const CedenteFormPage = () => {
 
     const existing = parametrizacoes.find((item) => item.modalidadeId === modalidadeId);
     await withCedenteReload(async () => {
+      const fidcParametrizacoes = existing
+        ? parametrizacoes.map((item) => (item.modalidadeId === modalidadeId ? { ...item, ...payload } : item))
+        : [...parametrizacoes, payload as ParametrizacaoDto];
+
       if (existing) {
-        await http.put(`/cadastros/cedentes/${cedenteId}/parametrizacao/${existing.id}`, payload);
+        await http.put('/api/cedente/parametrizacao', {
+          id: cedenteId,
+          cedenteParametrizacoes: fidcParametrizacoes,
+        });
       } else {
-        await http.post(`/cadastros/cedentes/${cedenteId}/parametrizacao`, payload);
+        await http.put('/api/cedente/parametrizacao', {
+          id: cedenteId,
+          cedenteParametrizacoes: fidcParametrizacoes,
+        });
       }
       toast.success('Parametrização salva.');
       if (!existing) {
@@ -1515,7 +1599,10 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/parametrizacao/${item.id}`);
+      await http.put('/api/cedente/parametrizacao', {
+        id: cedenteId,
+        cedenteParametrizacoes: parametrizacoes.filter((current) => current.id !== item.id),
+      });
       toast.success('Parametrização removida.');
     });
   };
@@ -1527,7 +1614,8 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/contratos`, {
+      await http.post('/api/cedente/cedenteContrato', {
+        cedenteId,
         tipoContrato: contratoForm.tipoContrato.trim(),
         numeroContrato: contratoForm.numeroContrato.trim(),
         dataInicio: contratoForm.dataInicio || new Date().toISOString(),
@@ -1564,7 +1652,9 @@ export const CedenteFormPage = () => {
     if (observacoesItem === null) return;
 
     await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/contratos/${item.id}`, {
+      await http.put('/api/cedente/cedenteContrato', {
+        id: item.id,
+        cedenteId,
         tipoContrato: tipoContrato.trim(),
         numeroContrato: numeroContrato.trim(),
         dataInicio: item.dataInicio,
@@ -1584,7 +1674,9 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/contratos/${item.id}`);
+      await http.delete('/api/cedente/cedenteContrato/remove', {
+        params: { id: item.id },
+      });
       toast.success('Contrato removido.');
     });
   };
@@ -1596,7 +1688,8 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/atualizacoes`, {
+      await http.post('/api/AtualizacoesCedente/register', {
+        cedenteId,
         titulo: atualizacaoForm.titulo.trim(),
         descricao: atualizacaoForm.descricao.trim() || null,
         status: atualizacaoForm.status.trim() || 'Aberto',
@@ -1629,7 +1722,9 @@ export const CedenteFormPage = () => {
     if (descricao === null) return;
 
     await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/atualizacoes/${item.id}`, {
+      await http.put('/api/AtualizacoesCedente/finalizarAtualizacao', {
+        id: item.id,
+        cedenteId,
         titulo: titulo.trim(),
         descricao: descricao.trim() || null,
         status: status.trim(),
@@ -1648,7 +1743,11 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/atualizacoes/${item.id}`);
+      await http.put('/api/AtualizacoesCedente/finalizarAtualizacao', {
+        id: item.id,
+        cedenteId,
+        status: 'Finalizado',
+      });
       toast.success('Atualização removida.');
     });
   };
@@ -1660,7 +1759,8 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/despesas`, {
+      await http.post('/api/cedente/despesa', {
+        cedenteId,
         despesaId: despesaForm.despesaId,
         valor: parseNumber(despesaForm.valor),
       });
@@ -1684,7 +1784,9 @@ export const CedenteFormPage = () => {
         throw new Error('Valor de despesa inválido.');
       }
 
-      await http.put(`/cadastros/cedentes/${cedenteId}/despesas/${item.id}`, {
+      await http.put('/api/cedente/despesa', {
+        id: item.id,
+        cedenteId,
         despesaId: item.despesaId,
         valor: parsedValor,
       });
@@ -1699,7 +1801,7 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/despesas/${item.id}`);
+      await http.delete(`/api/cedente/despesa/remove/${item.id}`);
       toast.success('Despesa removida.');
     });
   };
@@ -1707,7 +1809,7 @@ export const CedenteFormPage = () => {
   const importarDespesas = async () => {
     if (!cedenteId) return;
 
-    const response = await http.get(`/cadastros/cedentes/${cedenteId}/despesas/importaveis`);
+    const response = await http.get('/api/cedente/GetListImportarDespesas', { params: { id: cedenteId } });
     const importaveis = (response.data as DespesaImportavelDto[]) ?? [];
     if (importaveis.length === 0) {
       toast('Não há despesas disponíveis para importação.');
@@ -1719,7 +1821,8 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/despesas/importar`, {
+      await http.post('/api/cedente/importarDespesas', {
+        cedenteId,
         despesasIds: importaveis.map((item) => item.id),
       });
       toast.success('Despesas importadas.');
@@ -1733,7 +1836,9 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/juridico`, {
+      await http.post('/api/juridico/register', {
+        associacao: LegacyAssociationType.CEDENTE,
+        associacaoId: cedenteId,
         tipoAcao: juridicoForm.tipoAcao.trim(),
         numeroProcesso: juridicoForm.numeroProcesso.trim(),
         status: juridicoForm.status.trim() || 'Aberto',
@@ -1764,7 +1869,10 @@ export const CedenteFormPage = () => {
     if (observacoesItem === null) return;
 
     await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/juridico/${item.id}`, {
+      await http.put('/api/juridico/update', {
+        id: item.id,
+        associacao: LegacyAssociationType.CEDENTE,
+        associacaoId: cedenteId,
         tipoAcao: tipoAcao.trim(),
         numeroProcesso: numeroProcesso.trim(),
         status: status.trim(),
@@ -1782,7 +1890,7 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/juridico/${item.id}`);
+      await http.delete(`/api/juridico/remove/${item.id}`);
       toast.success('Registro jurídico removido.');
     });
   };
@@ -1794,13 +1902,16 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/pendencias`, {
-        titulo: pendenciaForm.titulo.trim(),
-        descricao: pendenciaForm.descricao.trim() || null,
-        status: pendenciaForm.status.trim() || 'Aberto',
-        prioridade: pendenciaForm.prioridade.trim() || null,
-        prazo: pendenciaForm.prazo || null,
-        resolucao: pendenciaForm.resolucao.trim() || null,
+      const formData = new FormData();
+      formData.append('id', cedenteId ?? '');
+      formData.append('titulo', pendenciaForm.titulo.trim());
+      formData.append('descricao', pendenciaForm.descricao.trim() || '');
+      formData.append('status', pendenciaForm.status.trim() || 'Aberto');
+      formData.append('prioridade', pendenciaForm.prioridade.trim() || '');
+      formData.append('prazo', pendenciaForm.prazo || '');
+      formData.append('resolucao', pendenciaForm.resolucao.trim() || '');
+      await http.post('/api/pendencia/register', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       setPendenciaForm({
@@ -1829,7 +1940,8 @@ export const CedenteFormPage = () => {
     if (resolucao === null) return;
 
     await withCedenteReload(async () => {
-      await http.put(`/cadastros/cedentes/${cedenteId}/pendencias/${item.id}`, {
+      await http.put('/api/pendencia/fecharpendencia', {
+        id: item.id,
         titulo: titulo.trim(),
         descricao: descricao.trim() || null,
         status: status.trim(),
@@ -1848,7 +1960,7 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/pendencias/${item.id}`);
+      await http.delete(`/api/pendencia/remove/${item.id}`);
       toast.success('Pendência removida.');
     });
   };
@@ -1860,31 +1972,24 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      const formData = new FormData();
-      formData.append('file', anexoFile);
-      await http.post(`/cadastros/cedentes/${cedenteId}/anexos`, formData);
+      if (!pessoaId) {
+        throw new Error('Pessoa do cedente não vinculada.');
+      }
+      await uploadLegacyAttachment(pessoaId, LegacyAssociationType.CEDENTE, anexoFile);
       setAnexoFile(null);
       toast.success('Anexo enviado.');
     });
   };
 
   const downloadAnexo = async (item: CadastroArquivoDto) => {
-    if (!cedenteId) return;
+    if (!pessoaId) return;
 
     try {
-      const response = await http.get(`/cadastros/cedentes/${cedenteId}/anexos/${item.id}/download`, {
-        responseType: 'blob',
-      });
-
-      const fileName = parseFileName(response.headers['content-disposition'] ?? null, item.nomeArquivo);
-      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
-      const anchor = document.createElement('a');
-      anchor.href = blobUrl;
-      anchor.download = fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.URL.revokeObjectURL(blobUrl);
+      const url = await getLegacyAttachmentDownloadUrl(item.id, LegacyAssociationType.CEDENTE);
+      if (!url) {
+        throw new Error('Não foi possível obter a URL do anexo.');
+      }
+      window.open(url, '_blank', 'noopener,noreferrer');
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -1896,7 +2001,7 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/anexos/${item.id}`);
+      await removeLegacyAttachment(item.id);
       toast.success('Anexo removido.');
     });
   };
@@ -1908,8 +2013,15 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.post(`/cadastros/cedentes/${cedenteId}/observacoes`, {
-        texto: textoObservacao.trim(),
+      if (!pessoaId) {
+        throw new Error('Pessoa do cedente não vinculada.');
+      }
+      await createLegacyObservation({
+        associationId: pessoaId,
+        associacao: LegacyAssociationType.CEDENTE,
+        titulo: 'Observação',
+        observacao: textoObservacao.trim(),
+        cedenteId,
       });
 
       setTextoObservacao('');
@@ -1923,7 +2035,7 @@ export const CedenteFormPage = () => {
     }
 
     await withCedenteReload(async () => {
-      await http.delete(`/cadastros/cedentes/${cedenteId}/observacoes/${item.id}`);
+      await removeLegacyObservation(item.id);
       toast.success('Observação removida.');
     });
   };

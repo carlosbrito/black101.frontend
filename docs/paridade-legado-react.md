@@ -64,16 +64,22 @@
 - `src/features/cadastros/administradoras/AdministradoraFormPage.tsx`
   - listagem/remoção alinhadas para `/api/administradora/get/list|remove`
   - entrada por documento alinhada ao legado via `/api/pessoa/get/cnpjcpf/{documento}`
+  - subtabs existentes alinhadas para `/api/administradora/get/unique|complemento|get/status|register/status|update/status|remove/status|get/tipos-recebiveis`
+  - representantes/anexos/observações/histórico migrados para os contratos legados compartilhados (`representante/associacao`, `documento`, `observacao`, `historico`)
 - `src/features/cadastros/cedentes/CedentesListPage.tsx`
 - `src/features/cadastros/cedentes/CedenteFormPage.tsx`
   - listagem principal alinhada para `POST /api/cedente/get/list`
   - remoção alinhada para `/api/cedente/remove`
   - entrada por documento alinhada ao legado via `/api/pessoa/get/cnpjcpf/{documento}`
+  - subtabs existentes alinhadas para `/api/cedente/get/uniqueCedente|get/list/contatosCedente|complemento|get/cedenteParametrizacao|get/cedenteContrato|despesa|workflow|deactivate`
+  - contratos, atualizações, despesas, jurídico, pendências, anexos, observações e histórico ajustados para os endpoints legados da área gestora
 - `src/features/cadastros/sacados/SacadosListPage.tsx`
 - `src/features/cadastros/sacados/SacadoFormPage.tsx`
   - listagem principal alinhada para `POST /api/sacado/get/list`
   - remoção alinhada para `/api/sacado/remove`
   - entrada por documento alinhada ao legado via `/api/pessoa/get/cnpjcpf/{documento}`
+  - subtabs existentes alinhadas para `/api/sacado/get/unique|get/list/contatosSacado|complemento|contatos|get/representante`
+  - anexos/observações/histórico migrados para os contratos legados compartilhados (`documento`, `observacao`, `historico`)
 - `src/features/cadastros/BasicosPages.tsx`
 - `src/features/cadastros/CadastroCrudPage.tsx`
 - `src/features/cadastros/basicos/entityApi.ts`
@@ -82,6 +88,11 @@
   - `Grupo Econômico` alinhado para `grupoEconomico/get|register|update|remove`
   - `Índices Debênture` ajustado para fonte estática local, sem backend remoto
   - criação/edição com vínculo via `/api/pessoa/get/cnpjcpf|register|update`
+- `src/features/cadastros/empresas/EmpresaFormPage.tsx`
+  - abas atuais (`cadastro`, `parametrização`, `anexos`, `observações`, `histórico`) alinhadas ao legado de `fidc`
+  - carga principal via `/api/fidc/get/unique/{id}` e persistência principal via `/api/pessoa/get/cnpjcpf|register|update` + `/api/fidc/register`
+  - parametrização consolidada em `PUT /api/fidc/parametrizacao` com reenvio da lista completa, como no legado
+  - anexos/observações/histórico conectados aos contratos genéricos legados por `personId`
 - `src/features/cadastros/representantes/RepresentantesListPage.tsx`
 - `src/features/cadastros/representantes/RepresentanteFormPage.tsx`
   - alinhados para `/api/representante/get/list|get/unique|register|update|remove`

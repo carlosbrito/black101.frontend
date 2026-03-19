@@ -22,6 +22,21 @@ import {
   type PessoaFormState,
   readPagedResponse,
 } from '../cadastroCommon';
+import {
+  createLegacyObservation,
+  createLegacyRepresentative,
+  getLegacyAttachmentDownloadUrl,
+  LegacyAssociationType,
+  listLegacyAttachments,
+  listLegacyHistory,
+  listLegacyObservations,
+  listLegacyRepresentatives,
+  removeLegacyAttachment,
+  removeLegacyObservation,
+  removeLegacyRepresentative,
+  updateLegacyRepresentative,
+  uploadLegacyAttachment,
+} from '../legacySubtabApi';
 import '../cadastro.css';
 import './entity-form.css';
 
@@ -183,33 +198,39 @@ export const AdministradoraFormPage = () => {
     }
   };
 
-  const loadSubTabs = async (id: string) => {
+  const loadSubTabs = async (id: string, associationId: string) => {
     const [complementoRes, statusRes, tiposRes, representantesRes, anexosRes, observacoesRes, historicoRes] =
       await Promise.all([
-        http.get(`/cadastros/administradoras/${id}/complemento`),
-        http.get(`/cadastros/administradoras/${id}/status`),
-        http.get(`/cadastros/administradoras/${id}/tipos-recebiveis`),
-        http.get(`/cadastros/administradoras/${id}/representantes`),
-        http.get(`/cadastros/administradoras/${id}/anexos`),
-        http.get(`/cadastros/administradoras/${id}/observacoes`),
-        http.get(`/cadastros/administradoras/${id}/historico`, { params: { page: 1, pageSize: 20 } }),
+        http.get(`/api/administradora/get/unique/${id}`),
+        http.get('/api/administradora/get/status', { params: { id } }),
+        http.get('/api/administradora/get/tipos-recebiveis', { params: { AdministradoraId: id } }),
+        listLegacyRepresentatives('administradora', id),
+        listLegacyAttachments(associationId, LegacyAssociationType.ADMINISTRADORA),
+        listLegacyObservations(associationId, LegacyAssociationType.ADMINISTRADORA),
+        listLegacyHistory(associationId, LegacyAssociationType.ADMINISTRADORA, 1, 20),
       ]);
 
-    setComplemento(complementoRes.data as ComplementoDto);
+    const adminData = complementoRes.data as {
+      administradoraComplemento?: ComplementoDto | null;
+    };
+    setComplemento(adminData.administradoraComplemento ?? createInitialComplemento());
     setStatusRows((statusRes.data as StatusDto[]) ?? []);
     setTiposRows((tiposRes.data as TipoRecebivelDto[]) ?? []);
-    setVinculosRows((representantesRes.data as AdministradoraRepresentanteDto[]) ?? []);
-    setAnexosRows((anexosRes.data as CadastroArquivoDto[]) ?? []);
-    setObservacoesRows((observacoesRes.data as CadastroObservacaoDto[]) ?? []);
-    setHistoricoPaged(readPagedResponse<HistoricoItemDto>(historicoRes.data));
+    setVinculosRows((representantesRes as AdministradoraRepresentanteDto[]) ?? []);
+    setAnexosRows((anexosRes as CadastroArquivoDto[]) ?? []);
+    setObservacoesRows((observacoesRes as CadastroObservacaoDto[]) ?? []);
+    setHistoricoPaged(historicoRes);
   };
 
-  const loadHistorico = async (id: string, page: number) => {
-    const response = await http.get(`/cadastros/administradoras/${id}/historico`, {
-      params: { page, pageSize: historicoPaged.pageSize },
-    });
-
-    setHistoricoPaged(readPagedResponse<HistoricoItemDto>(response.data));
+  const loadHistorico = async (_id: string, page: number) => {
+    if (!pessoaId) return;
+    const response = await listLegacyHistory(
+      pessoaId,
+      LegacyAssociationType.ADMINISTRADORA,
+      page,
+      historicoPaged.pageSize,
+    );
+    setHistoricoPaged(response);
   };
 
   useEffect(() => {
@@ -242,15 +263,12 @@ export const AdministradoraFormPage = () => {
 
       setLoading(true);
       try {
-        const adminResponse = await http.get(`/cadastros/administradoras/${administradoraId}`);
-        const administradora = adminResponse.data as AdministradoraDto;
+        const adminResponse = await http.get(`/api/administradora/get/unique/${administradoraId}`);
+        const administradora = adminResponse.data as AdministradoraDto & { pessoa: PessoaDto };
 
         setAdministradoraAtiva(administradora.ativo);
-
-        const pessoaResponse = await http.get(`/cadastros/pessoas/${administradora.pessoaId}`);
-        syncPessoaForm(pessoaResponse.data as PessoaDto);
-
-        await loadSubTabs(administradoraId);
+        syncPessoaForm(administradora.pessoa);
+        await loadSubTabs(administradoraId, administradora.pessoa.id);
       } catch (error) {
         toast.error(getErrorMessage(error));
       } finally {
@@ -288,29 +306,24 @@ export const AdministradoraFormPage = () => {
     let resolvedPessoaId = pessoaId;
 
     if (!resolvedPessoaId) {
-      const pessoaByDocument = await http.get('/cadastros/pessoas', {
-        params: {
-          documento: document,
-        },
+      const pessoaByDocument = await http.get(`/api/pessoa/get/cnpjcpf/${document}`, {
+        params: { enrichData: false, fazerConsultaPadrao: false, isToGetQSA: false },
       });
 
       const found = pessoaByDocument.data as PessoaDto | null;
 
-      if (found?.id) {
+      if (found?.id && found.id !== '00000000-0000-0000-0000-000000000000') {
         resolvedPessoaId = found.id;
       }
     }
 
     if (resolvedPessoaId) {
-      await http.put(`/cadastros/pessoas/${resolvedPessoaId}`, {
-        ...payload,
-        ativo: pessoaForm.ativo,
-      });
+      await http.put('/api/pessoa/update', { id: resolvedPessoaId, ...payload });
 
       return resolvedPessoaId;
     }
 
-    const createResponse = await http.post('/cadastros/pessoas', payload);
+    const createResponse = await http.post('/api/pessoa/register', payload);
     const created = createResponse.data as { id: string };
     return created.id;
   };
@@ -329,25 +342,13 @@ export const AdministradoraFormPage = () => {
       setPessoaId(resolvedPessoaId);
 
       if (administradoraId) {
-        await http.put(`/cadastros/administradoras/${administradoraId}`, {
-          pessoaId: resolvedPessoaId,
-          ativo: administradoraAtiva,
-        });
-
         toast.success('Administradora atualizada.');
       } else {
-        const createResponse = await http.post('/cadastros/administradoras', {
+        const createResponse = await http.post('/api/administradora/register', {
           pessoaId: resolvedPessoaId,
         });
 
         const created = createResponse.data as { id: string };
-
-        if (!administradoraAtiva) {
-          await http.put(`/cadastros/administradoras/${created.id}`, {
-            pessoaId: resolvedPessoaId,
-            ativo: administradoraAtiva,
-          });
-        }
 
         toast.success('Administradora criada.');
         navigate(`/cadastro/administradoras/${created.id}`, { replace: true });
@@ -365,12 +366,13 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.put(`/cadastros/administradoras/${administradoraId}/complemento`, {
+      await http.put('/api/administradora/complemento', {
+        administradoraId,
         nomeApresentacao: complemento.nomeApresentacao?.trim() || null,
       });
 
       toast.success('Complemento salvo.');
-      await loadSubTabs(administradoraId);
+      if (pessoaId) await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -383,15 +385,17 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.post(`/cadastros/administradoras/${administradoraId}/representantes`, {
+      await createLegacyRepresentative('administradora', {
+        administradoraId,
         representanteId: selectedRepresentanteId,
-        funcao: funcaoRepresentante.trim() || null,
+        representanteAssociacaoFuncaos: [{ Funcao: funcaoRepresentante.trim() ? Number(funcaoRepresentante) || 4 : 4 }],
+        representanteEmail: '',
       });
 
       setSelectedRepresentanteId('');
       setFuncaoRepresentante('');
       toast.success('Representante vinculado.');
-      await loadSubTabs(administradoraId);
+      if (pessoaId) await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -408,34 +412,24 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.put(`/cadastros/administradoras/${administradoraId}/representantes/${item.id}`, {
-        funcao: nextFuncao.trim() || null,
-        ativo: item.ativo,
+      await updateLegacyRepresentative('administradora', {
+        id: item.id,
+        administradoraId,
+        representanteId: item.representanteId,
+        representanteAssociacaoFuncaos: [{ Funcao: nextFuncao.trim() ? Number(nextFuncao) || 4 : 4 }],
+        representanteEmail: '',
       });
 
       toast.success('Vinculo atualizado.');
-      await loadSubTabs(administradoraId);
+      if (pessoaId) await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
   };
 
-  const toggleRepresentante = async (item: AdministradoraRepresentanteDto) => {
-    if (!administradoraId) {
-      return;
-    }
-
-    try {
-      await http.put(`/cadastros/administradoras/${administradoraId}/representantes/${item.id}`, {
-        funcao: item.funcao ?? null,
-        ativo: !item.ativo,
-      });
-
-      toast.success('Status do vinculo atualizado.');
-      await loadSubTabs(administradoraId);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
+  const toggleRepresentante = async (_item?: AdministradoraRepresentanteDto) => {
+    void _item;
+    toast('O legado não possui alternância direta de status para vínculo de representante. Use editar ou excluir.');
   };
 
   const removeRepresentante = async (item: AdministradoraRepresentanteDto) => {
@@ -448,9 +442,9 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/administradoras/${administradoraId}/representantes/${item.id}`);
+      await removeLegacyRepresentative('administradora', item.id);
       toast.success('Vinculo removido.');
-      await loadSubTabs(administradoraId);
+      if (pessoaId) await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -463,7 +457,8 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.post(`/cadastros/administradoras/${administradoraId}/status`, {
+      await http.post('/api/administradora/register/status', {
+        administradoraId,
         statusOperacaoGestora: statusOperacaoGestora.trim(),
         statusAdministradora: statusAdministradora.trim(),
       });
@@ -471,7 +466,7 @@ export const AdministradoraFormPage = () => {
       setStatusOperacaoGestora('');
       setStatusAdministradora('');
       toast.success('Status incluido.');
-      await loadSubTabs(administradoraId);
+      if (pessoaId) await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -493,13 +488,15 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.put(`/cadastros/administradoras/${administradoraId}/status/${item.id}`, {
+      await http.put('/api/administradora/update/status', {
+        id: item.id,
+        administradoraId,
         statusOperacaoGestora: operacao.trim(),
         statusAdministradora: administradora.trim(),
       });
 
       toast.success('Status atualizado.');
-      await loadSubTabs(administradoraId);
+      if (pessoaId) await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -515,9 +512,9 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/administradoras/${administradoraId}/status/${item.id}`);
+      await http.delete(`/api/administradora/remove/status/${item.id}`);
       toast.success('Status removido.');
-      await loadSubTabs(administradoraId);
+      if (pessoaId) await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -530,7 +527,8 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.post(`/cadastros/administradoras/${administradoraId}/tipos-recebiveis`, {
+      await http.post('/api/Administradora/tipos-recebiveis', {
+        administradoraId,
         tipoRecebivel: tipoRecebivel.trim(),
         codigoAdministradora: codigoAdministradora.trim(),
       });
@@ -538,7 +536,7 @@ export const AdministradoraFormPage = () => {
       setTipoRecebivel('');
       setCodigoAdministradora('');
       toast.success('Tipo de recebivel incluido.');
-      await loadSubTabs(administradoraId);
+      if (pessoaId) await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -560,13 +558,14 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.put(`/cadastros/administradoras/${administradoraId}/tipos-recebiveis/${item.id}`, {
+      await http.put(`/api/Administradora/tipos-recebiveis/${item.id}`, {
+        administradoraId,
         tipoRecebivel: tipo.trim(),
         codigoAdministradora: codigo.trim(),
       });
 
       toast.success('Tipo de recebivel atualizado.');
-      await loadSubTabs(administradoraId);
+      if (pessoaId) await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -582,77 +581,46 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/administradoras/${administradoraId}/tipos-recebiveis/${item.id}`);
+      await http.delete(`/api/Administradora/tipos-recebiveis/${item.id}`);
       toast.success('Tipo de recebivel removido.');
-      await loadSubTabs(administradoraId);
+      if (pessoaId) await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
   };
 
   const uploadAnexo = async () => {
-    if (!administradoraId || !anexoFile) {
+    if (!administradoraId || !anexoFile || !pessoaId) {
       toast.error('Selecione um arquivo para anexar.');
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', anexoFile);
-
     try {
-      await http.post(`/cadastros/administradoras/${administradoraId}/anexos`, formData);
+      await uploadLegacyAttachment(pessoaId, LegacyAssociationType.ADMINISTRADORA, anexoFile);
       setAnexoFile(null);
       toast.success('Anexo enviado.');
-      await loadSubTabs(administradoraId);
+      await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
   };
 
-  const parseFileName = (header: string | null, fallbackName: string): string => {
-    if (!header) {
-      return fallbackName;
-    }
-
-    const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(header);
-    if (utf8Match?.[1]) {
-      return decodeURIComponent(utf8Match[1]);
-    }
-
-    const quotedMatch = /filename="?([^";]+)"?/i.exec(header);
-    if (quotedMatch?.[1]) {
-      return quotedMatch[1];
-    }
-
-    return fallbackName;
-  };
-
   const downloadAnexo = async (item: CadastroArquivoDto) => {
-    if (!administradoraId) {
+    if (!pessoaId) {
       return;
     }
 
     try {
-      const response = await http.get(`/cadastros/administradoras/${administradoraId}/anexos/${item.id}/download`, {
-        responseType: 'blob',
-      });
-
-      const fileName = parseFileName(response.headers['content-disposition'] ?? null, item.nomeArquivo);
-      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
-      const anchor = document.createElement('a');
-      anchor.href = blobUrl;
-      anchor.download = fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.URL.revokeObjectURL(blobUrl);
+      const url = await getLegacyAttachmentDownloadUrl(item.id, LegacyAssociationType.ADMINISTRADORA);
+      if (!url) throw new Error('Não foi possível obter a URL do anexo.');
+      window.open(url, '_blank', 'noopener,noreferrer');
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
   };
 
   const removeAnexo = async (item: CadastroArquivoDto) => {
-    if (!administradoraId) {
+    if (!administradoraId || !pessoaId) {
       return;
     }
 
@@ -661,35 +629,38 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/administradoras/${administradoraId}/anexos/${item.id}`);
+      await removeLegacyAttachment(item.id);
       toast.success('Anexo removido.');
-      await loadSubTabs(administradoraId);
+      await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
   };
 
   const addObservacao = async () => {
-    if (!administradoraId || !textoObservacao.trim()) {
+    if (!administradoraId || !pessoaId || !textoObservacao.trim()) {
       toast.error('Informe a observacao.');
       return;
     }
 
     try {
-      await http.post(`/cadastros/administradoras/${administradoraId}/observacoes`, {
-        texto: textoObservacao.trim(),
+      await createLegacyObservation({
+        associationId: pessoaId,
+        associacao: LegacyAssociationType.ADMINISTRADORA,
+        titulo: 'Observação',
+        observacao: textoObservacao.trim(),
       });
 
       setTextoObservacao('');
       toast.success('Observacao adicionada.');
-      await loadSubTabs(administradoraId);
+      await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
   };
 
   const removeObservacao = async (item: CadastroObservacaoDto) => {
-    if (!administradoraId) {
+    if (!administradoraId || !pessoaId) {
       return;
     }
 
@@ -698,9 +669,9 @@ export const AdministradoraFormPage = () => {
     }
 
     try {
-      await http.delete(`/cadastros/administradoras/${administradoraId}/observacoes/${item.id}`);
+      await removeLegacyObservation(item.id);
       toast.success('Observacao removida.');
-      await loadSubTabs(administradoraId);
+      await loadSubTabs(administradoraId, pessoaId);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
